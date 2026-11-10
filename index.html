@@ -16,17 +16,19 @@
     .message { min-height:1.4rem; margin:0.3rem 0; font-weight:600; text-align:center; }
     .board { display:grid; grid-template-rows:repeat(6,1fr); gap:5px; margin-bottom:0.75rem; }
     .row { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; }
-    .tile { width:50px; height:50px; border:2px solid #3a3a3c; display:flex; align-items:center; justify-content:center; font-size:1.35rem; font-weight:700; text-transform:uppercase; transition:transform .15s; }
-    .tile.flip { transform:rotateX(90deg); }
+    .tile { width:50px; height:50px; border:2px solid #3a3a3c; display:flex; align-items:center; justify-content:center; font-size:1.35rem; font-weight:700; text-transform:uppercase; transition:transform .12s, background .12s; }
     .tile.correct { background:var(--correct); border-color:var(--correct); }
     .tile.present { background:var(--present); border-color:var(--present); }
     .tile.absent { background:var(--absent); border-color:var(--absent); }
+    .tile.shake { animation:shake 0.4s; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
     .keyboard { display:flex; flex-direction:column; gap:5px; }
     .kb-row { display:flex; gap:4px; justify-content:center; }
     .key { min-width:32px; height:46px; padding:0 6px; background:#818384; border:0; border-radius:4px; color:#fff; font-weight:600; cursor:pointer; font-size:0.85rem; }
     .key.correct { background:var(--correct); }
     .key.present { background:var(--present); }
     .key.absent { background:var(--absent); }
+    #share-btn { margin-top:0.5rem; padding:0.5rem 1rem; background:#538d4e; color:#fff; border:0; border-radius:6px; font-weight:600; cursor:pointer; display:none; }
     @media (max-width:400px) { .tile { width:42px; height:42px; font-size:1.1rem; } .key { min-width:26px; height:40px; font-size:0.75rem; } }
   </style>
 </head>
@@ -36,76 +38,73 @@
     <button id="btn-daily" class="active">Daily</button>
     <button id="btn-practice">Practice</button>
   </div>
-  <div class="stats" id="stats">Played: 0 | Win%: — | Streak: 0</div>
+  <div class="stats" id="stats">Played: 0 | Win%: — | Streak: 0 | Max: 0</div>
   <div class="message" id="message"></div>
   <div class="board" id="board"></div>
+  <button id="share-btn">Share result</button>
   <div class="keyboard" id="keyboard"></div>
 
   <script>
-    // Compact common 5-letter list (expandable)
     const WORDS = [
       'CRANE','SLATE','TRACE','ROAST','ADIEU','AUDIO','ARISE','STARE','CRATE','BRAIN',
       'TRAIN','SCORE','QUEST','GAMES','ALPHA','LEVEL','DAILY','HEART','LIGHT','GREEN',
       'PLANT','WORLD','WATER','EARTH','SPACE','STORM','SMILE','CLOUD','RIVER','STONE',
       'SHARE','SHINE','SHORT','SMART','SMALL','SPEED','SPOKE','STAGE','STAND','START',
-      'STATE','STEAL','STEAM','STEEL','STICK','STILL','STONE','STORE','STORY','SWEET',
+      'STATE','STEAL','STEAM','STEEL','STICK','STILL','STORE','STORY','SWEET',
       'TABLE','THINK','THREE','THROW','TIGER','TOAST','TODAY','TOKEN','TOUCH','TOUGH',
-      'TOWER','TRACK','TRADE','TRAIL','TRAIN','TREAT','TREND','TRIAL','TRICK','TRIED',
+      'TOWER','TRACK','TRADE','TRAIL','TREAT','TREND','TRIAL','TRICK','TRIED',
       'TRUST','TRUTH','TWICE','UNDER','UNION','UNITY','UNTIL','UPPER','USAGE','USUAL',
-      'VALUE','VIDEO','VIRUS','VISIT','VOICE','WATCH','WATER','WEARY','WHICH','WHILE',
-      'WHITE','WHOLE','WHOSE','WOMAN','WORLD','WORRY','WORSE','WORTH','WOULD','WRITE',
+      'VALUE','VIDEO','VIRUS','VISIT','VOICE','WATCH','WEARY','WHICH','WHILE',
+      'WHITE','WHOLE','WHOSE','WOMAN','WORRY','WORSE','WORTH','WOULD','WRITE',
       'WRONG','YOUNG','YOUTH','ABOUT','ABOVE','ABUSE','ACTOR','ACUTE','ADMIT','ADOPT',
       'ADULT','AFTER','AGAIN','AGENT','AGREE','AHEAD','ALARM','ALBUM','ALERT','ALIEN',
       'ALIGN','ALIKE','ALIVE','ALLOW','ALONE','ALONG','ALTER','AMONG','ANGER','ANGLE',
-      'ANGRY','APART','APPLE','APPLY','ARENA','ARGUE','ARISE','ARRAY','ASIDE','ASSET',
+      'ANGRY','APART','APPLE','APPLY','ARENA','ARGUE','ARRAY','ASIDE','ASSET',
       'AVOID','AWAKE','AWARD','AWARE','BADLY','BASIC','BEACH','BEGAN','BEGIN','BEING',
-      'BELOW','BENCH','BILLY','BIRTH','BLACK','BLAME','BLIND','BLOCK','BLOOD','BOARD',
-      'BOOST','BOOTH','BOUND','BRAIN','BRAND','BREAD','BREAK','BREED','BRIEF','BRING',
-      'BROAD','BROKE','BROWN','BUILD','BUILT','BUYER','CABLE','CALIF','CARRY','CATCH',
+      'BELOW','BENCH','BIRTH','BLACK','BLAME','BLIND','BLOCK','BLOOD','BOARD',
+      'BOOST','BOUND','BRAND','BREAD','BREAK','BRIEF','BRING',
+      'BROAD','BROKE','BROWN','BUILD','BUILT','CABLE','CARRY','CATCH',
       'CAUSE','CHAIN','CHAIR','CHAOS','CHARM','CHART','CHASE','CHEAP','CHECK','CHEST',
-      'CHIEF','CHILD','CHINA','CHOSE','CIVIL','CLAIM','CLASS','CLEAN','CLEAR','CLICK',
-      'CLIMB','CLOCK','CLOSE','CLOUD','COACH','COAST','COULD','COUNT','COURT','COVER',
-      'CRAFT','CRASH','CRAZY','CREAM','CRIME','CROSS','CROWD','CROWN','CRUDE','CURVE',
-      'CYCLE','DAILY','DANCE','DATED','DEALT','DEATH','DEBUT','DELAY','DEPTH','DOING',
-      'DOUBT','DOZEN','DRAFT','DRAMA','DRAWN','DREAM','DRESS','DRINK','DRIVE','DROVE',
-      'DYING','EAGER','EARLY','EARTH','EIGHT','ELITE','EMPTY','ENEMY','ENJOY','ENTER',
-      'ENTRY','EQUAL','ERROR','EVENT','EVERY','EXACT','EXIST','EXTRA','FAITH','FALSE',
-      'FAULT','FIBER','FIELD','FIFTH','FIFTY','FIGHT','FINAL','FIRST','FIXED','FLASH',
-      'FLEET','FLOOR','FLUID','FOCUS','FORCE','FORTH','FORTY','FORUM','FOUND','FRAME',
-      'FRANK','FRAUD','FRESH','FRONT','FROST','FRUIT','FULLY','FUNNY','GIANT','GIVEN',
+      'CHIEF','CHILD','CHOSE','CIVIL','CLAIM','CLASS','CLEAN','CLEAR','CLICK',
+      'CLIMB','CLOCK','CLOSE','COACH','COAST','COULD','COUNT','COURT','COVER',
+      'CRAFT','CRASH','CRAZY','CREAM','CRIME','CROSS','CROWD','CROWN','CURVE',
+      'CYCLE','DANCE','DEALT','DEATH','DELAY','DEPTH','DOUBT','DOZEN','DRAFT','DRAMA',
+      'DRAWN','DREAM','DRESS','DRINK','DRIVE','EAGER','EARLY','EIGHT','ELITE','EMPTY',
+      'ENEMY','ENJOY','ENTER','ENTRY','EQUAL','ERROR','EVENT','EVERY','EXACT','EXIST',
+      'EXTRA','FAITH','FALSE','FAULT','FIELD','FIFTH','FIGHT','FINAL','FIRST','FIXED',
+      'FLASH','FLEET','FLOOR','FOCUS','FORCE','FORTH','FORTY','FOUND','FRAME',
+      'FRANK','FRESH','FRONT','FROST','FRUIT','FULLY','FUNNY','GIANT','GIVEN',
       'GLASS','GLOBE','GOING','GRACE','GRADE','GRAND','GRANT','GRASS','GRAVE','GREAT',
-      'GREEN','GROSS','GROUP','GROWN','GUARD','GUESS','GUEST','GUIDE','HAPPY','HARRY',
-      'HEART','HEAVY','HENCE','HENRY','HORSE','HOTEL','HOUSE','HUMAN','IDEAL','IMAGE',
-      'INDEX','INNER','INPUT','ISSUE','JAPAN','JIMMY','JOINT','JONES','JUDGE','KNOWN',
+      'GROSS','GROUP','GROWN','GUARD','GUESS','GUEST','GUIDE','HAPPY',
+      'HEAVY','HENCE','HORSE','HOTEL','HOUSE','HUMAN','IDEAL','IMAGE',
+      'INDEX','INNER','INPUT','ISSUE','JOINT','JUDGE','KNOWN',
       'LABEL','LARGE','LASER','LATER','LAUGH','LAYER','LEARN','LEASE','LEAST','LEAVE',
-      'LEGAL','LEVEL','LEWIS','LIGHT','LIMIT','LINKS','LIVES','LOCAL','LOOSE','LOWER',
-      'LUCKY','LUNCH','LYING','MAGIC','MAJOR','MAKER','MARCH','MARIA','MATCH','MAYBE',
+      'LEGAL','LIMIT','LINKS','LIVES','LOCAL','LOOSE','LOWER',
+      'LUCKY','LUNCH','MAGIC','MAJOR','MAKER','MARCH','MATCH','MAYBE',
       'MAYOR','MEANT','MEDIA','METAL','MIGHT','MINOR','MINUS','MIXED','MODEL','MONEY',
       'MONTH','MORAL','MOTOR','MOUNT','MOUSE','MOUTH','MOVED','MOVIE','MUSIC','NEEDS',
       'NEVER','NEWLY','NIGHT','NOISE','NORTH','NOTED','NOVEL','NURSE','OCCUR','OCEAN',
       'OFFER','OFTEN','ORDER','OTHER','OUGHT','PAINT','PANEL','PAPER','PARTY','PEACE',
-      'PETER','PHASE','PHONE','PHOTO','PIECE','PILOT','PITCH','PLACE','PLAIN','PLANE',
-      'PLANT','PLATE','POINT','POUND','POWER','PRESS','PRICE','PRIDE','PRIME','PRINT',
+      'PHASE','PHONE','PHOTO','PIECE','PILOT','PITCH','PLACE','PLAIN','PLANE',
+      'PLATE','POINT','POUND','POWER','PRESS','PRICE','PRIDE','PRIME','PRINT',
       'PRIOR','PRIZE','PROOF','PROUD','PROVE','QUEEN','QUICK','QUIET','QUITE','RADIO',
       'RAISE','RANGE','RAPID','RATIO','REACH','READY','REALM','REBEL','REFER','RELAX',
-      'REPAY','REPLY','RIGHT','RIVAL','RIVER','ROBIN','ROGER','ROMAN','ROUGH','ROUND',
-      'ROUTE','ROYAL','RURAL','SCALE','SCENE','SCOPE','SCORE','SENSE','SERVE','SEVEN',
-      'SHALL','SHAPE','SHARE','SHARP','SHEET','SHELF','SHELL','SHIFT','SHINE','SHIRT',
-      'SHOCK','SHOOT','SHORT','SHOWN','SIGHT','SINCE','SIXTH','SIXTY','SIZED','SKILL',
-      'SLEEP','SLIDE','SMALL','SMART','SMILE','SMITH','SMOKE','SOLID','SOLVE','SORRY',
-      'SOUND','SOUTH','SPACE','SPARE','SPEAK','SPEED','SPEND','SPENT','SPLIT','SPOKE',
-      'SPORT','STAFF','STAGE','STAKE','STAND','START','STATE','STEAM','STEEL','STEEP',
-      'STEER','STEVE','STICK','STILL','STOCK','STONE','STOOD','STORE','STORM','STORY',
-      'STRIP','STUCK','STUDY','STUFF','STYLE','SUGAR','SUITE','SUPER','SWEET','TABLE',
-      'TAKEN','TASTE','TAXES','TEACH','TERRY','TEXAS','THANK','THEFT','THEIR','THEME',
-      'THERE','THESE','THICK','THING','THINK','THIRD','THOSE','THREE','THREW','THROW',
-      'TIGHT','TIMES','TIRED','TITLE','TODAY','TOPIC','TOTAL','TOUCH','TOUGH','TOWER',
-      'TRACK','TRADE','TRAIN','TREAT','TREND','TRIAL','TRIBE','TRICK','TRIED','TRIES',
-      'TRUCK','TRULY','TRUNK','TRUST','TRUTH','TWICE','UNDER','UNDUE','UNION','UNITY',
-      'UNTIL','UPPER','UPSET','URBAN','USAGE','USUAL','VALID','VALUE','VIDEO','VIRUS',
-      'VISIT','VITAL','VOCAL','VOICE','WASTE','WATCH','WATER','WHEEL','WHERE','WHICH',
-      'WHILE','WHITE','WHOLE','WHOSE','WOMAN','WOMEN','WORLD','WORRY','WORSE','WORST',
-      'WORTH','WOULD','WOUND','WRITE','WRONG','WROTE','YIELD','YOUNG','YOUTH'
+      'REPAY','REPLY','RIGHT','RIVAL','ROBIN','ROUGH','ROUND',
+      'ROUTE','ROYAL','RURAL','SCALE','SCENE','SCOPE','SENSE','SERVE','SEVEN',
+      'SHALL','SHAPE','SHARP','SHEET','SHELF','SHELL','SHIFT','SHIRT',
+      'SHOCK','SHOOT','SHOWN','SIGHT','SINCE','SIXTH','SIXTY','SIZED','SKILL',
+      'SLEEP','SLIDE','SMITH','SMOKE','SOLID','SOLVE','SORRY',
+      'SOUND','SOUTH','SPARE','SPEAK','SPEND','SPENT','SPLIT',
+      'SPORT','STAFF','STAKE','STEAM','STEEP',
+      'STEER','STICK','STOCK','STOOD','STRIP','STUCK','STUDY','STUFF','STYLE','SUGAR','SUITE','SUPER',
+      'TAKEN','TASTE','TAXES','TEACH','THANK','THEFT','THEIR','THEME',
+      'THERE','THESE','THICK','THING','THIRD','THOSE','THREW',
+      'TIGHT','TIMES','TIRED','TITLE','TOPIC','TOTAL',
+      'TREND','TRIBE','TRIES',
+      'TRUCK','TRULY','TRUNK','UNDUE','UPSET','URBAN',
+      'VALID','VITAL','VOCAL','WASTE','WHEEL','WHERE',
+      'WHILE','WHOLE','WOMEN','WORST',
+      'WOUND','WROTE','YIELD'
     ];
     const WORD_SET = new Set(WORDS);
 
@@ -130,12 +129,14 @@
     let target = dailyWord();
     let guesses = Array.from({length:6}, () => Array(5).fill(''));
     let currentRow = 0, currentCol = 0, gameOver = false;
+    let lastResults = [];
 
     const board = document.getElementById('board');
     const message = document.getElementById('message');
     const statsEl = document.getElementById('stats');
     const btnDaily = document.getElementById('btn-daily');
     const btnPractice = document.getElementById('btn-practice');
+    const shareBtn = document.getElementById('share-btn');
 
     for (let r = 0; r < 6; r++) {
       const row = document.createElement('div'); row.className = 'row';
@@ -168,20 +169,21 @@
     const hubCall = (method, ...args) => { try { const s = window.Hub; if (typeof s?.[method] === 'function') s[method](...args); } catch {} };
 
     function loadStats() {
-      return JSON.parse(localStorage.getItem('rw-stats') || '{"played":0,"wins":0,"streak":0,"maxStreak":0,"lastDaily":""}');
+      return JSON.parse(localStorage.getItem('rw-stats') || '{"played":0,"wins":0,"streak":0,"maxStreak":0,"lastDaily":"","dailyResult":null}');
     }
     function saveStats(s) { localStorage.setItem('rw-stats', JSON.stringify(s)); }
     function updateStats() {
       const s = loadStats();
       const pct = s.played ? Math.round(s.wins / s.played * 100) : 0;
-      statsEl.textContent = `Played: ${s.played} | Win%: ${pct}% | Streak: ${s.streak}`;
+      statsEl.textContent = `Played: ${s.played} | Win%: ${pct}% | Streak: ${s.streak} | Max: ${s.maxStreak}`;
     }
     updateStats();
 
     function resetBoard() {
       guesses = Array.from({length:6}, () => Array(5).fill(''));
-      currentRow = 0; currentCol = 0; gameOver = false;
+      currentRow = 0; currentCol = 0; gameOver = false; lastResults = [];
       message.textContent = '';
+      shareBtn.style.display = 'none';
       for (let r = 0; r < 6; r++) for (let c = 0; c < 5; c++) {
         const t = document.getElementById(`t${r}${c}`);
         t.textContent = ''; t.className = 'tile';
@@ -193,8 +195,20 @@
       mode = m;
       btnDaily.classList.toggle('active', m === 'daily');
       btnPractice.classList.toggle('active', m === 'practice');
-      target = m === 'daily' ? dailyWord() : WORDS[Math.floor(Math.random()*WORDS.length)];
-      resetBoard();
+      const s = loadStats();
+      const today = new Date().toISOString().slice(0,10);
+      if (m === 'daily' && s.lastDaily === today && s.dailyResult) {
+        // already done
+        target = dailyWord();
+        resetBoard();
+        gameOver = true;
+        message.textContent = s.dailyResult.won ? `Daily already solved in ${s.dailyResult.guesses}` : `Daily already failed. Word was ${target}`;
+        shareBtn.style.display = 'block';
+        lastResults = s.dailyResult.grid || [];
+      } else {
+        target = m === 'daily' ? dailyWord() : WORDS[Math.floor(Math.random()*WORDS.length)];
+        resetBoard();
+      }
       hubCall('ready');
     }
     btnDaily.addEventListener('click', () => setMode('daily'));
@@ -232,25 +246,46 @@
         }
       });
     }
+    function emojiGrid() {
+      return lastResults.map(row => row.map(s => s === 'correct' ? '🟩' : s === 'present' ? '🟨' : '⬛').join('')).join('\n');
+    }
+    shareBtn.addEventListener('click', async () => {
+      const text = `Rokumon Word ${mode === 'daily' ? new Date().toISOString().slice(0,10) : 'Practice'}\n${emojiGrid()}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        message.textContent = 'Result copied!';
+      } catch {
+        message.textContent = text;
+      }
+    });
+
     function submit() {
       if (gameOver || currentCol < 5) return;
       const guess = guesses[currentRow].join('');
-      if (!WORD_SET.has(guess)) { message.textContent = 'Not in word list'; return; }
+      if (!WORD_SET.has(guess)) {
+        message.textContent = 'Not in word list';
+        document.getElementById(`t${currentRow}0`).parentElement.classList.add('shake');
+        setTimeout(() => document.getElementById(`t${currentRow}0`).parentElement.classList.remove('shake'), 400);
+        return;
+      }
       message.textContent = '';
       const result = evaluate(guess);
+      lastResults.push(result);
       result.forEach((status, i) => {
         const tile = document.getElementById(`t${currentRow}${i}`);
         tile.classList.add(status);
         colorKey(guess[i], status);
       });
       const s = loadStats();
+      const today = new Date().toISOString().slice(0,10);
       if (guess === target) {
         message.textContent = mode === 'daily' ? 'Daily solved!' : 'Solved!';
         gameOver = true;
+        shareBtn.style.display = 'block';
         s.played++; s.wins++;
         if (mode === 'daily') {
-          const today = new Date().toISOString().slice(0,10);
           if (s.lastDaily !== today) { s.streak++; s.lastDaily = today; if (s.streak > s.maxStreak) s.maxStreak = s.streak; }
+          s.dailyResult = { won: true, guesses: currentRow + 1, grid: lastResults };
         }
         saveStats(s); updateStats();
         hubCall('score', 7 - (currentRow + 1));
@@ -259,8 +294,13 @@
       } else if (currentRow === 5) {
         message.textContent = `The word was ${target}`;
         gameOver = true;
+        shareBtn.style.display = 'block';
         s.played++;
-        if (mode === 'daily') s.streak = 0;
+        if (mode === 'daily') {
+          s.streak = 0;
+          s.lastDaily = today;
+          s.dailyResult = { won: false, guesses: 6, grid: lastResults };
+        }
         saveStats(s); updateStats();
         hubCall('gameOver', 0, 0);
       } else {
@@ -274,7 +314,6 @@
       else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key.toUpperCase());
     });
 
-    // Init daily
     setMode('daily');
     hubCall('ready');
   </script>
