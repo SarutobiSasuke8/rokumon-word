@@ -3,15 +3,15 @@
   "title": "Rokumon Word",
   "tagline": "Daily word puzzle with practice mode.",
   "description": "Guess the five-letter word with colour feedback. Date-seeded daily puzzle plus unlimited practice. Valid-word checks, streaks, local stats and platform events.",
-  "status": "alpha",
+  "status": "released",
   "visibility": "unlisted",
   "featured": false,
-  "version": "0.2.0",
-  "releasedAt": null,
+  "version": "1.0.0",
+  "releasedAt": "2026-11-10",
   "updatedAt": "2026-11-10",
   "delivery": {
     "mode": "embedded",
-    "release": "0.2.0",
+    "release": "1.0.0",
     "budget": { "maxBundleBytes": 1048576, "maxFiles": 8 }
   },
   "genres": ["Puzzle", "Word"],
@@ -25,11 +25,11 @@
     "logo": null,
     "screenshots": []
   },
-  "theme": { "accent": "#538d4e", "background": "#121213" },
+  "theme": { "accent": "#E0B15A", "background": "#0C1114" },
   "credits": {
     "developer": "Rokumon Games",
-    "art": null,
-    "audio": null
+    "art": "Rokumon Games",
+    "audio": "Synthesized Web Audio"
   },
   "runtime": {
     "kind": "iframe",

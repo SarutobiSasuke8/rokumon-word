@@ -2,47 +2,578 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0c1114">
+  <meta name="description" content="Rokumon Word — a daily five-letter puzzle with practice mode.">
   <title>Rokumon Word</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,680&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --bg:#121213; --fg:#fff; --absent:#3a3a3c; --present:#b59f3b; --correct:#538d4e; }
-    * { box-sizing:border-box; }
-    body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; min-height:100vh; padding:0.75rem; }
-    h1 { margin:0.4rem 0; font-size:1.5rem; }
-    .top { display:flex; gap:0.6rem; margin-bottom:0.5rem; flex-wrap:wrap; justify-content:center; }
-    .top button { padding:0.4rem 0.8rem; border:0; border-radius:6px; background:#3a3a3c; color:#fff; cursor:pointer; font-weight:600; }
-    .top button.active { background:#538d4e; }
-    .stats { font-size:0.9rem; opacity:0.85; margin-bottom:0.5rem; text-align:center; }
-    .message { min-height:1.4rem; margin:0.3rem 0; font-weight:600; text-align:center; }
-    .board { display:grid; grid-template-rows:repeat(6,1fr); gap:5px; margin-bottom:0.75rem; }
-    .row { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; }
-    .tile { width:50px; height:50px; border:2px solid #3a3a3c; display:flex; align-items:center; justify-content:center; font-size:1.35rem; font-weight:700; text-transform:uppercase; transition:transform .12s, background .12s; }
-    .tile.correct { background:var(--correct); border-color:var(--correct); }
-    .tile.present { background:var(--present); border-color:var(--present); }
-    .tile.absent { background:var(--absent); border-color:var(--absent); }
-    .tile.shake { animation:shake 0.4s; }
-    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
-    .keyboard { display:flex; flex-direction:column; gap:5px; }
-    .kb-row { display:flex; gap:4px; justify-content:center; }
-    .key { min-width:32px; height:46px; padding:0 6px; background:#818384; border:0; border-radius:4px; color:#fff; font-weight:600; cursor:pointer; font-size:0.85rem; }
-    .key.correct { background:var(--correct); }
-    .key.present { background:var(--present); }
-    .key.absent { background:var(--absent); }
-    #share-btn { margin-top:0.5rem; padding:0.5rem 1rem; background:#538d4e; color:#fff; border:0; border-radius:6px; font-weight:600; cursor:pointer; display:none; }
-    @media (max-width:400px) { .tile { width:42px; height:42px; font-size:1.1rem; } .key { min-width:26px; height:40px; font-size:0.75rem; } }
+    :root {
+      --ink: #0c1114;
+      --ink-2: #141b20;
+      --panel: #182026;
+      --line: #2c3840;
+      --cream: #f4efe4;
+      --muted: #93a0a8;
+      --gold: #e0b15a;
+      --gold-deep: #b8882e;
+      --vermilion: #e24b3b;
+      --present: #6a4f9e;
+      --absent: #3a454d;
+      --absent-ink: #e8eef0;
+      --key-top: #616c74;
+      --key-bot: #4a545c;
+      --display: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+      --sans: "Outfit", "Avenir Next", "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--cream);
+      font-family: var(--sans);
+      background:
+        radial-gradient(ellipse 90% 42% at 50% -12%, rgba(226, 75, 59, 0.18), transparent 58%),
+        radial-gradient(ellipse 50% 36% at 100% 100%, rgba(224, 177, 90, 0.08), transparent 60%),
+        var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font-family: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+    .app {
+      height: 100dvh;
+      max-height: 100dvh;
+      width: min(100%, 520px);
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      padding:
+        max(10px, env(safe-area-inset-top))
+        max(12px, env(safe-area-inset-right))
+        max(8px, env(safe-area-inset-bottom))
+        max(12px, env(safe-area-inset-left));
+      overflow: hidden;
+    }
+    header {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 52px;
+      padding-bottom: 6px;
+    }
+    header::before {
+      content: "";
+      position: absolute;
+      left: -20px;
+      right: -20px;
+      top: -18px;
+      height: 92px;
+      pointer-events: none;
+      opacity: 0.22;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='56' height='98' viewBox='0 0 56 98'><path d='M28 1 55 16.5v31L28 63 1 47.5v-31Z' fill='none' stroke='%23e0b15a' stroke-width='1.15'/><path d='M28 35 55 50.5v31L28 97 1 81.5v-31Z' fill='none' stroke='%23e0b15a' stroke-width='1.15'/></svg>");
+      background-size: 56px 98px;
+      mask-image: linear-gradient(#000, transparent);
+    }
+    .brand { position: relative; display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .mark { width: 40px; height: 40px; flex: none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
+    .wordmark { display: flex; flex-direction: column; line-height: 1; min-width: 0; }
+    .kicker {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+    .title {
+      font-family: var(--display);
+      font-weight: 560;
+      font-size: 1.7rem;
+      letter-spacing: -0.03em;
+      color: var(--cream);
+    }
+    .icon-btn {
+      position: relative;
+      width: 40px;
+      height: 40px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(20, 27, 32, 0.8);
+      color: var(--cream);
+      display: grid;
+      place-items: center;
+      transition: transform 150ms ease, background 150ms ease;
+    }
+    .icon-btn:active { transform: scale(0.96); }
+    .modes {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      width: min(280px, 100%);
+      margin: 2px auto 0;
+      padding: 4px;
+      border-radius: 999px;
+      background: #12181c;
+      border: 1px solid var(--line);
+    }
+    .glider {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      left: 4px;
+      width: calc(50% - 4px);
+      border-radius: 999px;
+      background: linear-gradient(180deg, #f3d79a, #d7a441);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.45);
+      transition: transform 200ms ease;
+    }
+    .modes.practice .glider { transform: translateX(100%); }
+    .modes button {
+      position: relative;
+      z-index: 1;
+      height: 36px;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.92rem;
+      border-radius: 999px;
+    }
+    .modes button[aria-selected="true"] { color: #1a1408; }
+    .subhead {
+      margin: 8px 0 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+      letter-spacing: 0.02em;
+      min-height: 1.1em;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin: 8px auto 0;
+      width: min(100%, 360px);
+    }
+    .stat {
+      text-align: center;
+      padding: 6px 2px 5px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(44, 56, 64, 0.85);
+    }
+    .stat b {
+      display: block;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--cream);
+    }
+    .stat span {
+      display: block;
+      margin-top: 1px;
+      font-size: 0.62rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .board-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      container-type: size;
+      display: grid;
+      place-items: center;
+      padding: 6px 0;
+    }
+    .board {
+      width: min(100cqi, calc(100cqb * 5 / 6));
+      height: min(100cqb, calc(100cqi * 6 / 5));
+      display: grid;
+      grid-template-rows: repeat(6, minmax(0, 1fr));
+      gap: 6px;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px;
+      min-height: 0;
+      perspective: 480px;
+    }
+    .tile {
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
+      border: 2px solid #3a464e;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: calc(100cqi / 13);
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--cream);
+      background: rgba(12, 17, 20, 0.35);
+      user-select: none;
+      transform-style: preserve-3d;
+      transition: border-color 120ms ease, background 120ms ease;
+    }
+    .tile.filled { border-color: #7d8b93; }
+    .tile.correct { background: var(--gold); border-color: var(--gold); color: #1a1408; }
+    .tile.present { background: var(--present); border-color: var(--present); color: var(--cream); }
+    .tile.absent { background: var(--absent); border-color: var(--absent); color: var(--absent-ink); }
+    .tile.revealed:empty::after {
+      content: "";
+      width: 22%;
+      height: 22%;
+      min-width: 6px;
+      min-height: 6px;
+      border-radius: 2px;
+      background: currentColor;
+      opacity: 0.8;
+    }
+    .tile.correct.revealed:empty::after { background: currentColor; opacity: 0.55; }
+    .tile.pop { animation: pop 110ms ease; }
+    .tile.flipping { animation: flip 320ms ease-in-out; }
+    .tile.dance { animation: dance 520ms ease; }
+    .row.shake { animation: shake 480ms cubic-bezier(.36,.07,.19,.97); }
+    @keyframes pop {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    @keyframes flip {
+      0% { transform: rotateX(0); }
+      50% { transform: rotateX(-90deg); }
+      100% { transform: rotateX(0); }
+    }
+    @keyframes dance {
+      0%, 100% { transform: translateY(0); }
+      35% { transform: translateY(-10px); }
+      55% { transform: translateY(0); }
+      72% { transform: translateY(-4px); }
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      12% { transform: translateX(-8px) rotate(-0.4deg); }
+      24% { transform: translateX(7px) rotate(0.4deg); }
+      36% { transform: translateX(-6px); }
+      48% { transform: translateX(5px); }
+      60% { transform: translateX(-3px); }
+      72% { transform: translateX(2px); }
+      84% { transform: translateX(-1px); }
+    }
+    .toast {
+      position: absolute;
+      top: 6px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-4px);
+      z-index: 3;
+      margin: 0;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--cream);
+      color: #1a1408;
+      font-weight: 700;
+      font-size: 0.84rem;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .dock { width: min(100%, 500px); margin: 0 auto; }
+    .keyboard { display: flex; flex-direction: column; gap: 6px; padding-bottom: 2px; }
+    .keyboard[hidden] { display: none !important; }
+    .kb-row { display: flex; gap: 4px; justify-content: center; }
+    .kb-row:nth-child(2) { padding-inline: 8px; }
+    .key {
+      flex: 1 1 0;
+      min-width: 0;
+      height: clamp(42px, 6.1dvh, 54px);
+      padding: 0 2px;
+      border: 0;
+      border-radius: 8px;
+      background: linear-gradient(180deg, var(--key-top), var(--key-bot));
+      color: var(--cream);
+      font-weight: 700;
+      font-size: clamp(0.72rem, 3.1vw, 0.95rem);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 1px 0 rgba(0,0,0,0.4);
+      transition: transform 80ms ease, filter 80ms ease, background 180ms ease;
+      display: grid;
+      place-items: center;
+      touch-action: manipulation;
+      user-select: none;
+    }
+    .key.wide { flex: 1.45 1 0; font-size: clamp(0.62rem, 2.5vw, 0.78rem); letter-spacing: 0.04em; }
+    .key:active { transform: scale(0.96); }
+    .key.correct { background: var(--gold); color: #1a1408; }
+    .key.present { background: var(--present); color: var(--cream); }
+    .key.absent { background: #3a454d; color: #d5dde0; box-shadow: none; }
+    .result {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.035), transparent 42%),
+        var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px 14px 12px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.28);
+      animation: rise 240ms ease;
+    }
+    .result[hidden] { display: none; }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+    .eyebrow {
+      margin: 0;
+      text-align: center;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+    .result h2 {
+      margin: 2px 0 0;
+      text-align: center;
+      font-family: var(--display);
+      font-weight: 560;
+      font-size: 1.7rem;
+      letter-spacing: -0.03em;
+    }
+    .detail, .countdown {
+      margin: 2px 0 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+    .chips { display: flex; justify-content: center; gap: 5px; margin: 8px 0 4px; }
+    .chip {
+      width: 28px;
+      height: 32px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      background: var(--gold);
+      color: #1a1408;
+    }
+    .share {
+      width: 100%;
+      height: 48px;
+      margin-top: 8px;
+      border: 0;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #f3d79a, #d7a441);
+      color: #1a1408;
+      font-weight: 700;
+      font-size: 1rem;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 8px 18px rgba(215, 164, 65, 0.2);
+      transition: transform 150ms ease;
+    }
+    .share:active { transform: scale(0.96); }
+    .ghost {
+      width: 100%;
+      margin-top: 6px;
+      height: 36px;
+      border: 0;
+      background: transparent;
+      color: var(--cream);
+      font-weight: 650;
+      font-size: 0.88rem;
+    }
+    .fallback {
+      margin: 8px 0 0;
+      padding: 8px;
+      border-radius: 8px;
+      background: #0e1418;
+      color: var(--cream);
+      font-family: ui-monospace, monospace;
+      font-size: 0.75rem;
+      white-space: pre-wrap;
+      user-select: text;
+    }
+    dialog {
+      border: 0;
+      padding: 0;
+      background: transparent;
+      width: min(420px, calc(100vw - 28px));
+      color: var(--cream);
+    }
+    dialog::backdrop { background: rgba(6, 8, 10, 0.72); }
+    .panel {
+      background: #141b20;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 16px 16px 14px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+      max-height: min(78dvh, 640px);
+      overflow: auto;
+    }
+    .panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .panel h2 {
+      margin: 0;
+      font-family: var(--display);
+      font-weight: 560;
+      font-size: 1.55rem;
+    }
+    .panel h3 {
+      margin: 16px 0 6px;
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+    .panel p { margin: 0 0 8px; color: #d9d3c6; font-size: 0.92rem; line-height: 1.45; }
+    .demo { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+    .demo .tile { --size: 34px; width: 34px; height: 34px; font-size: 15px; flex: none; }
+    .demo p { margin: 0; font-size: 0.84rem; color: var(--muted); }
+    .sound-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 4px;
+    }
+    .switch {
+      width: 46px;
+      height: 28px;
+      border: 0;
+      border-radius: 999px;
+      background: #2a333a;
+      position: relative;
+      padding: 0;
+      flex: none;
+    }
+    .switch[aria-checked="true"] { background: var(--gold-deep); }
+    .switch i {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--cream);
+      transition: transform 160ms ease;
+    }
+    .switch[aria-checked="true"] i { transform: translateX(18px); }
+    @media (max-height: 700px) {
+      .app > .stats, .subhead { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>Rokumon Word</h1>
-  <div class="top">
-    <button id="btn-daily" class="active">Daily</button>
-    <button id="btn-practice">Practice</button>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 3.2 42.5 14v20L24 44.8 5.5 34V14Z" fill="#1a120e" stroke="#e0b15a" stroke-width="1.7"/>
+          <path d="M24 12.2 34.2 18v12L24 35.8 13.8 30V18Z" fill="#e24b3b"/>
+          <path d="M24 17.2v11.2M18.6 20.2 24 17.2l5.4 3M18.6 26.2 24 28.8l5.4-2.6" fill="none" stroke="#f4efe4" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="wordmark">
+          <span class="kicker">Rokumon</span>
+          <span class="title">Word</span>
+        </div>
+      </div>
+      <button class="icon-btn" id="info-btn" type="button" aria-label="How to play and stats">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.25" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M12 11.2V16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="12" cy="8.1" r="0.95" fill="currentColor"/>
+        </svg>
+      </button>
+    </header>
+
+    <div class="modes" id="modes" role="tablist" aria-label="Game mode">
+      <span class="glider" aria-hidden="true"></span>
+      <button id="btn-daily" type="button" role="tab" aria-selected="true">Daily</button>
+      <button id="btn-practice" type="button" role="tab" aria-selected="false">Practice</button>
+    </div>
+    <p class="subhead" id="subhead"></p>
+    <div class="stats" id="stats" aria-label="Your record">
+      <div class="stat"><b id="st-played">0</b><span>Played</span></div>
+      <div class="stat"><b id="st-win">—</b><span>Win %</span></div>
+      <div class="stat"><b id="st-streak">0</b><span>Streak</span></div>
+      <div class="stat"><b id="st-max">0</b><span>Max</span></div>
+    </div>
+
+    <div class="board-wrap">
+      <p class="toast" id="toast" role="status"></p>
+      <div class="board" id="board" aria-label="Guesses"></div>
+    </div>
+
+    <div class="dock">
+      <section class="result" id="result" hidden>
+        <p class="eyebrow" id="result-kicker">Daily</p>
+        <h2 id="result-title">Splendid</h2>
+        <p class="detail" id="result-detail"></p>
+        <div class="chips" id="chips" aria-hidden="true"></div>
+        <p class="countdown" id="countdown" hidden></p>
+        <button class="share" id="share-btn" type="button">Share result</button>
+        <pre class="fallback" id="share-fallback" hidden></pre>
+        <button class="ghost" id="again-btn" type="button">Practice a word</button>
+      </section>
+      <div class="keyboard" id="keyboard"></div>
+    </div>
   </div>
-  <div class="stats" id="stats">Played: 0 | Win%: — | Streak: 0 | Max: 0</div>
-  <div class="message" id="message"></div>
-  <div class="board" id="board"></div>
-  <button id="share-btn">Share result</button>
-  <div class="keyboard" id="keyboard"></div>
+
+  <dialog id="info" aria-labelledby="info-title">
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="info-title">How to play</h2>
+        <button class="icon-btn" id="info-close" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <p>Guess the five-letter word in six tries. Each guess has to be a real word. Hit Enter to lock it in.</p>
+      <div class="demo">
+        <div class="tile revealed correct">A</div>
+        <p><strong style="color:#f4efe4">Gold</strong> — right letter, right place.</p>
+      </div>
+      <div class="demo">
+        <div class="tile revealed present">R</div>
+        <p><strong style="color:#f4efe4">Violet</strong> — in the word, wrong place.</p>
+      </div>
+      <div class="demo">
+        <div class="tile revealed absent">E</div>
+        <p><strong style="color:#f4efe4">Ink</strong> — not in the word.</p>
+      </div>
+      <h3>Daily and practice</h3>
+      <p><strong style="color:#f4efe4">Daily</strong> is one shared word for the calendar day. Finish it — win or lose — and it stays locked until tomorrow. Your streak moves only on the daily puzzle.</p>
+      <p><strong style="color:#f4efe4">Practice</strong> deals a fresh word whenever you want. Those games still count toward played and wins, but they do not touch the streak.</p>
+      <h3>Your record</h3>
+      <div class="stats" id="stats-dialog" aria-label="Stats overview">
+        <div class="stat"><b id="dg-played">0</b><span>Played</span></div>
+        <div class="stat"><b id="dg-win">—</b><span>Win %</span></div>
+        <div class="stat"><b id="dg-streak">0</b><span>Streak</span></div>
+        <div class="stat"><b id="dg-max">0</b><span>Max</span></div>
+      </div>
+      <h3>Sound</h3>
+      <div class="sound-row">
+        <p style="margin:0">Tile taps and the end-of-game chime.</p>
+        <button class="switch" id="sound-toggle" type="button" role="switch" aria-checked="true" aria-label="Sound">
+          <i></i>
+        </button>
+      </div>
+    </div>
+  </dialog>
 
   <script>
     const WORDS = [
@@ -107,13 +638,14 @@
       'WOUND','WROTE','YIELD'
     ];
     const WORD_SET = new Set(WORDS);
+    const PRAISE = ['Flawless', 'Brilliant', 'Splendid', 'Well struck', 'Close', 'Saved'];
 
     function dateSeed() {
       const d = new Date();
-      return d.getFullYear() * 10000 + (d.getMonth()+1) * 100 + d.getDate();
+      return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
     }
     function mulberry32(a) {
-      return function() {
+      return function () {
         let t = a += 0x6D2B79F5;
         t = Math.imul(t ^ t >>> 15, t | 1);
         t ^= t + Math.imul(t ^ t >>> 7, t | 61);
@@ -124,46 +656,80 @@
       const rng = mulberry32(dateSeed());
       return WORDS[Math.floor(rng() * WORDS.length)];
     }
+    function puzzleNo() {
+      const start = Date.UTC(2026, 0, 1);
+      const now = new Date();
+      const day = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+      return Math.floor((day - start) / 86400000) + 1;
+    }
 
     let mode = 'daily';
     let target = dailyWord();
-    let guesses = Array.from({length:6}, () => Array(5).fill(''));
+    let guesses = Array.from({ length: 6 }, () => Array(5).fill(''));
     let currentRow = 0, currentCol = 0, gameOver = false;
     let lastResults = [];
+    let revealing = false;
+    let revealTimer = [];
+    let endState = null;
+    let toastTimer = 0;
+    let countdownTimer = 0;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     const board = document.getElementById('board');
-    const message = document.getElementById('message');
-    const statsEl = document.getElementById('stats');
+    const toast = document.getElementById('toast');
     const btnDaily = document.getElementById('btn-daily');
     const btnPractice = document.getElementById('btn-practice');
+    const modesEl = document.getElementById('modes');
     const shareBtn = document.getElementById('share-btn');
+    const againBtn = document.getElementById('again-btn');
+    const resultEl = document.getElementById('result');
+    const keyboardEl = document.getElementById('keyboard');
+    const subhead = document.getElementById('subhead');
+    const info = document.getElementById('info');
+    const soundToggle = document.getElementById('sound-toggle');
 
     for (let r = 0; r < 6; r++) {
-      const row = document.createElement('div'); row.className = 'row';
+      const row = document.createElement('div');
+      row.className = 'row';
       for (let c = 0; c < 5; c++) {
-        const t = document.createElement('div'); t.className = 'tile'; t.id = `t${r}${c}`;
+        const t = document.createElement('div');
+        t.className = 'tile';
+        t.id = `t${r}${c}`;
         row.appendChild(t);
       }
       board.appendChild(row);
     }
 
-    const KEYS = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
-    const kb = document.getElementById('keyboard');
-    KEYS.forEach(rowStr => {
-      const r = document.createElement('div'); r.className = 'kb-row';
+    const KEYS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+    KEYS.forEach((rowStr) => {
+      const r = document.createElement('div');
+      r.className = 'kb-row';
+      if (rowStr === 'ZXCVBNM') {
+        const enter = document.createElement('button');
+        enter.className = 'key wide';
+        enter.type = 'button';
+        enter.textContent = 'ENTER';
+        enter.addEventListener('click', submit);
+        r.appendChild(enter);
+      }
       for (const k of rowStr) {
-        const btn = document.createElement('button'); btn.className = 'key'; btn.textContent = k;
+        const btn = document.createElement('button');
+        btn.className = 'key';
+        btn.type = 'button';
+        btn.textContent = k;
         btn.addEventListener('click', () => handleKey(k));
         r.appendChild(btn);
       }
       if (rowStr === 'ZXCVBNM') {
-        const enter = document.createElement('button'); enter.className = 'key'; enter.textContent = 'ENTER';
-        enter.addEventListener('click', submit);
-        const del = document.createElement('button'); del.className = 'key'; del.textContent = '⌫';
+        const del = document.createElement('button');
+        del.className = 'key wide';
+        del.type = 'button';
+        del.setAttribute('aria-label', 'Delete');
+        del.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8.2 6.5h10.2a1.6 1.6 0 0 1 1.6 1.6v7.8a1.6 1.6 0 0 1-1.6 1.6H8.2L3.2 12l5-5.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M11 9.8l4.4 4.4M15.4 9.8 11 14.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
         del.addEventListener('click', () => handleKey('Backspace'));
-        r.prepend(enter); r.append(del);
+        r.appendChild(del);
       }
-      kb.appendChild(r);
+      keyboardEl.appendChild(r);
     });
 
     const hubCall = (method, ...args) => { try { const s = window.Hub; if (typeof s?.[method] === 'function') s[method](...args); } catch {} };
@@ -172,57 +738,248 @@
       return JSON.parse(localStorage.getItem('rw-stats') || '{"played":0,"wins":0,"streak":0,"maxStreak":0,"lastDaily":"","dailyResult":null}');
     }
     function saveStats(s) { localStorage.setItem('rw-stats', JSON.stringify(s)); }
+    function loadPrefs() {
+      try { return JSON.parse(localStorage.getItem('rw-prefs') || '{"sound":true}'); }
+      catch { return { sound: true }; }
+    }
+    function savePrefs(p) { localStorage.setItem('rw-prefs', JSON.stringify(p)); }
+    let soundOn = loadPrefs().sound !== false;
+    soundToggle.setAttribute('aria-checked', soundOn ? 'true' : 'false');
+
     function updateStats() {
       const s = loadStats();
       const pct = s.played ? Math.round(s.wins / s.played * 100) : 0;
-      statsEl.textContent = `Played: ${s.played} | Win%: ${pct}% | Streak: ${s.streak} | Max: ${s.maxStreak}`;
+      const win = s.played ? pct + '%' : '—';
+      const pairs = [
+        ['st-played', 'dg-played', s.played],
+        ['st-win', 'dg-win', win],
+        ['st-streak', 'dg-streak', s.streak],
+        ['st-max', 'dg-max', s.maxStreak],
+      ];
+      for (const [a, b, v] of pairs) {
+        document.getElementById(a).textContent = String(v);
+        document.getElementById(b).textContent = String(v);
+      }
     }
     updateStats();
 
-    function resetBoard() {
-      guesses = Array.from({length:6}, () => Array(5).fill(''));
-      currentRow = 0; currentCol = 0; gameOver = false; lastResults = [];
-      message.textContent = '';
-      shareBtn.style.display = 'none';
-      for (let r = 0; r < 6; r++) for (let c = 0; c < 5; c++) {
-        const t = document.getElementById(`t${r}${c}`);
-        t.textContent = ''; t.className = 'tile';
+    let audioCtx = null;
+    function unlockAudio() {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC({ latencyHint: 'interactive' });
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    window.addEventListener('pointerdown', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    });
+    function blip(freq, dur, type, peak) {
+      if (!soundOn || !audioCtx) return;
+      const t = audioCtx.currentTime;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak || 0.05), t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g);
+      g.connect(audioCtx.destination);
+      o.start(t);
+      o.stop(t + dur + 0.02);
+    }
+    function playTap() { blip(540, 0.035, 'triangle', 0.03); }
+    function playInvalid() { blip(110, 0.16, 'sine', 0.05); blip(78, 0.18, 'triangle', 0.03); }
+    function playReveal(status) {
+      const freq = status === 'correct' ? 640 : status === 'present' ? 460 : 196;
+      blip(freq, 0.09, status === 'absent' ? 'sine' : 'triangle', status === 'absent' ? 0.03 : 0.05);
+    }
+    function playWin() {
+      [523, 659, 784, 1046].forEach((f, i) => {
+        window.setTimeout(() => blip(f, 0.16, 'triangle', 0.05), i * 90);
+      });
+    }
+    function playLose() {
+      [392, 311, 233].forEach((f, i) => {
+        window.setTimeout(() => blip(f, 0.2, 'sine', 0.045), i * 120);
+      });
+    }
+
+    function flash(text) {
+      window.clearTimeout(toastTimer);
+      if (!text) {
+        toast.classList.remove('show');
+        toast.textContent = '';
+        return;
       }
-      document.querySelectorAll('.key').forEach(k => k.className = 'key');
+      toast.textContent = text;
+      toast.classList.add('show');
+      toastTimer = window.setTimeout(() => toast.classList.remove('show'), 1400);
+    }
+
+    function clearRevealTimers() {
+      revealTimer.forEach((id) => clearTimeout(id));
+      revealTimer = [];
+      revealing = false;
+    }
+    function later(fn, ms) {
+      const id = window.setTimeout(fn, ms);
+      revealTimer.push(id);
+      return id;
+    }
+
+    function hideResult() {
+      resultEl.hidden = true;
+      keyboardEl.hidden = false;
+      window.clearInterval(countdownTimer);
+    }
+    function resetBoard() {
+      clearRevealTimers();
+      guesses = Array.from({ length: 6 }, () => Array(5).fill(''));
+      currentRow = 0;
+      currentCol = 0;
+      gameOver = false;
+      lastResults = [];
+      endState = null;
+      flash('');
+      hideResult();
+      shareBtn.textContent = 'Share result';
+      document.getElementById('share-fallback').hidden = true;
+      for (let r = 0; r < 6; r++) {
+        const row = document.getElementById(`t${r}0`).parentElement;
+        row.classList.remove('shake');
+        for (let c = 0; c < 5; c++) {
+          const t = document.getElementById(`t${r}${c}`);
+          t.textContent = '';
+          t.className = 'tile';
+          t.style.animationDelay = '';
+        }
+      }
+      document.querySelectorAll('.key').forEach((k) => { k.className = k.classList.contains('wide') ? 'key wide' : 'key'; });
+    }
+
+    function paintGrid(grid) {
+      (grid || []).forEach((row, r) => {
+        row.forEach((status, c) => {
+          const tile = document.getElementById(`t${r}${c}`);
+          tile.textContent = '';
+          tile.className = 'tile revealed ' + status;
+        });
+      });
+    }
+
+    function setSubhead() {
+      if (mode === 'daily') {
+        const when = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        subhead.textContent = `No. ${puzzleNo()} · ${when} · one word for everyone`;
+      } else {
+        subhead.textContent = 'A new word every round · streak stays on daily';
+      }
+    }
+
+    function showResult(state) {
+      endState = state;
+      const won = !!state.won;
+      const guessesUsed = state.guesses;
+      document.getElementById('result-kicker').textContent = state.already
+        ? (mode === 'daily' ? 'Already played today' : 'Practice')
+        : (mode === 'daily' ? 'Daily' : 'Practice');
+      document.getElementById('result-title').textContent = won
+        ? (PRAISE[Math.max(0, Math.min(5, guessesUsed - 1))] || 'Solved')
+        : 'Not this time';
+      document.getElementById('result-detail').textContent = won
+        ? `Solved in ${guessesUsed} ${guessesUsed === 1 ? 'guess' : 'guesses'}`
+        : 'Six guesses used';
+      const chips = document.getElementById('chips');
+      chips.replaceChildren();
+      for (const ch of target) {
+        const chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = ch;
+        chips.appendChild(chip);
+      }
+      againBtn.textContent = mode === 'daily' ? 'Practice a word' : 'New word';
+      keyboardEl.hidden = true;
+      resultEl.hidden = false;
+      if (mode === 'daily') {
+        const countdown = document.getElementById('countdown');
+        countdown.hidden = false;
+        const tick = () => {
+          const n = new Date();
+          const next = new Date(n);
+          next.setHours(24, 0, 0, 0);
+          const s = Math.max(0, Math.floor((next - n) / 1000));
+          const h = Math.floor(s / 3600);
+          const m = Math.floor((s % 3600) / 60);
+          const sec = s % 60;
+          countdown.textContent = `Next word in ${h}h ${String(m).padStart(2, '0')}m ${String(sec).padStart(2, '0')}s`;
+        };
+        tick();
+        window.clearInterval(countdownTimer);
+        countdownTimer = window.setInterval(tick, 1000);
+      } else {
+        document.getElementById('countdown').hidden = true;
+        window.clearInterval(countdownTimer);
+      }
     }
 
     function setMode(m) {
       mode = m;
+      modesEl.classList.toggle('practice', m === 'practice');
+      btnDaily.setAttribute('aria-selected', m === 'daily' ? 'true' : 'false');
+      btnPractice.setAttribute('aria-selected', m === 'practice' ? 'true' : 'false');
       btnDaily.classList.toggle('active', m === 'daily');
       btnPractice.classList.toggle('active', m === 'practice');
       const s = loadStats();
-      const today = new Date().toISOString().slice(0,10);
+      const today = new Date().toISOString().slice(0, 10);
+      setSubhead();
       if (m === 'daily' && s.lastDaily === today && s.dailyResult) {
-        // already done
         target = dailyWord();
         resetBoard();
         gameOver = true;
-        message.textContent = s.dailyResult.won ? `Daily already solved in ${s.dailyResult.guesses}` : `Daily already failed. Word was ${target}`;
-        shareBtn.style.display = 'block';
         lastResults = s.dailyResult.grid || [];
+        paintGrid(lastResults);
+        showResult({
+          won: !!s.dailyResult.won,
+          guesses: s.dailyResult.guesses || 6,
+          already: true,
+        });
       } else {
-        target = m === 'daily' ? dailyWord() : WORDS[Math.floor(Math.random()*WORDS.length)];
+        target = m === 'daily' ? dailyWord() : WORDS[Math.floor(Math.random() * WORDS.length)];
         resetBoard();
       }
       hubCall('ready');
     }
-    btnDaily.addEventListener('click', () => setMode('daily'));
-    btnPractice.addEventListener('click', () => setMode('practice'));
+    btnDaily.addEventListener('click', () => { if (!revealing) setMode('daily'); });
+    btnPractice.addEventListener('click', () => { if (!revealing) setMode('practice'); });
+    againBtn.addEventListener('click', () => setMode(mode === 'daily' ? 'practice' : 'practice'));
 
     function updateTile(r, c) {
-      document.getElementById(`t${r}${c}`).textContent = guesses[r][c];
+      const tile = document.getElementById(`t${r}${c}`);
+      tile.textContent = guesses[r][c];
+      tile.classList.toggle('filled', !!guesses[r][c]);
+      if (guesses[r][c]) {
+        tile.classList.remove('pop');
+        void tile.offsetWidth;
+        tile.classList.add('pop');
+      }
     }
     function handleKey(k) {
-      if (gameOver) return;
+      if (gameOver || revealing) return;
       if (k === 'Backspace') {
-        if (currentCol > 0) { currentCol--; guesses[currentRow][currentCol] = ''; updateTile(currentRow, currentCol); }
+        if (currentCol > 0) {
+          currentCol--;
+          guesses[currentRow][currentCol] = '';
+          updateTile(currentRow, currentCol);
+          playTap();
+        }
       } else if (/^[A-Z]$/.test(k) && currentCol < 5) {
-        guesses[currentRow][currentCol] = k; updateTile(currentRow, currentCol); currentCol++;
+        guesses[currentRow][currentCol] = k;
+        updateTile(currentRow, currentCol);
+        currentCol++;
+        playTap();
       }
     }
     function evaluate(guess) {
@@ -239,7 +996,7 @@
     }
     function colorKey(letter, status) {
       const priority = { correct: 3, present: 2, absent: 1 };
-      document.querySelectorAll('.key').forEach(btn => {
+      document.querySelectorAll('.key').forEach((btn) => {
         if (btn.textContent === letter) {
           const cur = btn.classList.contains('correct') ? 3 : btn.classList.contains('present') ? 2 : btn.classList.contains('absent') ? 1 : 0;
           if (priority[status] > cur) btn.className = 'key ' + status;
@@ -247,71 +1004,156 @@
       });
     }
     function emojiGrid() {
-      return lastResults.map(row => row.map(s => s === 'correct' ? '🟩' : s === 'present' ? '🟨' : '⬛').join('')).join('\n');
+      return lastResults.map((row) => row.map((s) => s === 'correct' ? '🟩' : s === 'present' ? '🟨' : '⬛').join('')).join('\n');
     }
     shareBtn.addEventListener('click', async () => {
-      const text = `Rokumon Word ${mode === 'daily' ? new Date().toISOString().slice(0,10) : 'Practice'}\n${emojiGrid()}`;
+      const text = `Rokumon Word ${mode === 'daily' ? new Date().toISOString().slice(0, 10) : 'Practice'}\n${emojiGrid()}`;
+      try {
+        if (navigator.share) {
+          await navigator.share({ text });
+          return;
+        }
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
       try {
         await navigator.clipboard.writeText(text);
-        message.textContent = 'Result copied!';
+        shareBtn.textContent = 'Copied';
+        window.setTimeout(() => { shareBtn.textContent = 'Share result'; }, 1600);
       } catch {
-        message.textContent = text;
+        const fb = document.getElementById('share-fallback');
+        fb.hidden = false;
+        fb.textContent = text;
       }
     });
 
-    function submit() {
-      if (gameOver || currentCol < 5) return;
-      const guess = guesses[currentRow].join('');
-      if (!WORD_SET.has(guess)) {
-        message.textContent = 'Not in word list';
-        document.getElementById(`t${currentRow}0`).parentElement.classList.add('shake');
-        setTimeout(() => document.getElementById(`t${currentRow}0`).parentElement.classList.remove('shake'), 400);
-        return;
-      }
-      message.textContent = '';
-      const result = evaluate(guess);
-      lastResults.push(result);
+    function shakeRow() {
+      const row = document.getElementById(`t${currentRow}0`).parentElement;
+      row.classList.remove('shake');
+      void row.offsetWidth;
+      row.classList.add('shake');
+      later(() => row.classList.remove('shake'), 500);
+    }
+    function revealRow(row, guess, result, done) {
+      const motion = !reduceMotion;
       result.forEach((status, i) => {
-        const tile = document.getElementById(`t${currentRow}${i}`);
-        tile.classList.add(status);
-        colorKey(guess[i], status);
+        const tile = document.getElementById(`t${row}${i}`);
+        const delay = motion ? i * 280 : 0;
+        later(() => {
+          if (motion) tile.classList.add('flipping');
+          playReveal(status);
+          later(() => {
+            tile.classList.add(status, 'revealed');
+            colorKey(guess[i], status);
+          }, motion ? 150 : 0);
+        }, delay);
       });
+      later(done, motion ? 5 * 280 + 340 : 30);
+    }
+    function bounceRow(row) {
+      if (reduceMotion) return;
+      for (let c = 0; c < 5; c++) {
+        const tile = document.getElementById(`t${row}${c}`);
+        tile.classList.remove('flipping');
+        tile.style.animationDelay = `${c * 70}ms`;
+        tile.classList.add('dance');
+      }
+    }
+    function commitGuess(guess) {
       const s = loadStats();
-      const today = new Date().toISOString().slice(0,10);
+      const today = new Date().toISOString().slice(0, 10);
       if (guess === target) {
-        message.textContent = mode === 'daily' ? 'Daily solved!' : 'Solved!';
         gameOver = true;
-        shareBtn.style.display = 'block';
-        s.played++; s.wins++;
+        s.played++;
+        s.wins++;
         if (mode === 'daily') {
-          if (s.lastDaily !== today) { s.streak++; s.lastDaily = today; if (s.streak > s.maxStreak) s.maxStreak = s.streak; }
+          if (s.lastDaily !== today) {
+            s.streak++;
+            s.lastDaily = today;
+            if (s.streak > s.maxStreak) s.maxStreak = s.streak;
+          }
           s.dailyResult = { won: true, guesses: currentRow + 1, grid: lastResults };
         }
-        saveStats(s); updateStats();
+        saveStats(s);
+        updateStats();
         hubCall('score', 7 - (currentRow + 1));
         hubCall('event', 'puzzle-completed', { guesses: currentRow + 1, daily: mode === 'daily', streak: s.streak });
         hubCall('gameOver', 7 - (currentRow + 1), 0);
-      } else if (currentRow === 5) {
-        message.textContent = `The word was ${target}`;
+        return { won: true, guesses: currentRow + 1, already: false, row: currentRow };
+      }
+      if (currentRow === 5) {
         gameOver = true;
-        shareBtn.style.display = 'block';
         s.played++;
         if (mode === 'daily') {
           s.streak = 0;
           s.lastDaily = today;
           s.dailyResult = { won: false, guesses: 6, grid: lastResults };
         }
-        saveStats(s); updateStats();
+        saveStats(s);
+        updateStats();
         hubCall('gameOver', 0, 0);
-      } else {
-        currentRow++; currentCol = 0;
+        return { won: false, guesses: 6, already: false, row: currentRow };
       }
+      currentRow++;
+      currentCol = 0;
+      return null;
+    }
+    function submit() {
+      if (gameOver || revealing) return;
+      if (currentCol < 5) {
+        if (currentCol > 0) {
+          shakeRow();
+          flash('Not enough letters');
+          playInvalid();
+        }
+        return;
+      }
+      const guess = guesses[currentRow].join('');
+      if (!WORD_SET.has(guess)) {
+        shakeRow();
+        flash('Not in word list');
+        playInvalid();
+        return;
+      }
+      flash('');
+      const result = evaluate(guess);
+      lastResults.push(result);
+      const rowIndex = currentRow;
+      const outcome = commitGuess(guess);
+      revealing = true;
+      revealRow(rowIndex, guess, result, () => {
+        revealing = false;
+        if (!outcome) return;
+        if (outcome.won) {
+          bounceRow(outcome.row);
+          playWin();
+        } else {
+          playLose();
+        }
+        showResult(outcome);
+      });
     }
 
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Enter') submit();
-      else if (e.key === 'Backspace') handleKey('Backspace');
-      else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key.toUpperCase());
+    document.addEventListener('keydown', (e) => {
+      if (info.open) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.repeat && e.key !== 'Backspace') return;
+      if (e.key === 'Enter') { e.preventDefault(); submit(); }
+      else if (e.key === 'Backspace') { e.preventDefault(); handleKey('Backspace'); }
+      else if (/^[a-zA-Z]$/.test(e.key)) { e.preventDefault(); handleKey(e.key.toUpperCase()); }
+    });
+
+    document.getElementById('info-btn').addEventListener('click', () => {
+      updateStats();
+      info.showModal();
+    });
+    document.getElementById('info-close').addEventListener('click', () => info.close());
+    info.addEventListener('click', (e) => { if (e.target === info) info.close(); });
+    soundToggle.addEventListener('click', () => {
+      soundOn = !soundOn;
+      soundToggle.setAttribute('aria-checked', soundOn ? 'true' : 'false');
+      savePrefs({ sound: soundOn });
+      if (soundOn) { unlockAudio(); playTap(); }
     });
 
     setMode('daily');
