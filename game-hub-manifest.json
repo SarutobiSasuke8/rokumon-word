@@ -6,12 +6,12 @@
   "status": "released",
   "visibility": "unlisted",
   "featured": false,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "releasedAt": "2026-11-10",
   "updatedAt": "2026-11-10",
   "delivery": {
     "mode": "embedded",
-    "release": "1.0.1",
+    "release": "1.0.2",
     "budget": { "maxBundleBytes": 1048576, "maxFiles": 8 }
   },
   "genres": ["Puzzle", "Word"],

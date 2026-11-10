@@ -7,7 +7,7 @@ A daily five-letter word puzzle for the Rokumon catalogue. One shared word each 
 1. Open `index.html` in a browser, or let the hub load it in an iframe.
 2. You have six guesses at a five-letter word.
 3. Every guess has to be in the in-game word list. Submit with Enter, or tap the on-screen Enter key.
-4. After a guess, each tile turns:
+4. After a guess, each tile flips. Gold has a bar along the bottom, violet a pale frame, and ink a hatch, so the three states still read if the colours are hard to tell apart:
    - **Gold** — right letter, right place
    - **Violet** — the letter is in the word, wrong place
    - **Ink** — the letter is not in the word

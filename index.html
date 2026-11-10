@@ -130,6 +130,11 @@
       transition: transform 150ms ease, background 150ms ease;
     }
     .icon-btn:active { transform: scale(0.96); }
+    .icon-btn.hint { animation: hint 1.8s ease-in-out 2; }
+    @keyframes hint {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(224, 177, 90, 0); }
+      50% { box-shadow: 0 0 0 6px rgba(224, 177, 90, 0.28); }
+    }
     .modes {
       position: relative;
       display: grid;
@@ -250,13 +255,16 @@
       color: var(--cream);
       background: rgba(12, 17, 20, 0.35);
       user-select: none;
-      transform-style: preserve-3d;
-      transition: border-color 120ms ease, background 120ms ease;
     }
     .tile.filled { border-color: #7d8b93; }
     .tile.correct { background: var(--gold); border-color: var(--gold); color: #1a1408; }
     .tile.present { background: var(--present); border-color: var(--present); color: var(--cream); }
     .tile.absent { background: var(--absent); border-color: var(--absent); color: var(--absent-ink); }
+    .tile.revealed.correct:not(.cell) { box-shadow: inset 0 -5px 0 rgba(26, 20, 8, 0.38); }
+    .tile.revealed.present:not(.cell) { box-shadow: inset 0 0 0 3px rgba(244, 239, 228, 0.38); }
+    .tile.revealed.absent:not(.cell) {
+      background-image: repeating-linear-gradient(-45deg, transparent 0 5px, rgba(255,255,255,0.05) 5px 6px);
+    }
     .tile.revealed:empty::after {
       content: "";
       width: 22%;
@@ -268,19 +276,83 @@
       opacity: 0.8;
     }
     .tile.correct.revealed:empty::after { background: currentColor; opacity: 0.55; }
-    .tile.pop { animation: pop 110ms ease; }
-    .tile.flipping { animation: flip 320ms ease-in-out; }
+    .tile.cell {
+      border: 0;
+      background: transparent;
+      display: block;
+      perspective: 560px;
+    }
+    .flipper {
+      display: block;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 460ms cubic-bezier(.4, .05, .2, 1);
+    }
+    .tile.cell.revealed .flipper { transform: rotateX(-180deg); }
+    .tile.cell.sealed .flipper { transition: none; }
+    .front, .back {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      border: 2px solid #3a464e;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+    }
+    .front {
+      background: rgba(12, 17, 20, 0.55);
+      color: var(--cream);
+      transform: translateZ(1px);
+    }
+    .tile.cell.filled .front {
+      border-color: #e0b15a;
+      background: rgba(224, 177, 90, 0.08);
+    }
+    .back {
+      transform: rotateX(180deg) translateZ(1px);
+      background: var(--absent);
+      border-color: var(--absent);
+      color: var(--absent-ink);
+    }
+    .tile.cell.correct .back {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: #1a1408;
+      box-shadow: inset 0 -5px 0 rgba(26, 20, 8, 0.38);
+    }
+    .tile.cell.present .back {
+      background: var(--present);
+      border-color: var(--present);
+      color: var(--cream);
+      box-shadow: inset 0 0 0 3px rgba(244, 239, 228, 0.38);
+    }
+    .tile.cell.absent .back {
+      background-color: var(--absent);
+      background-image: repeating-linear-gradient(-45deg, transparent 0 5px, rgba(255,255,255,0.05) 5px 6px);
+    }
+    .tile.cell.sealed .back::before {
+      content: "";
+      width: 26%;
+      height: 26%;
+      border-radius: 2px;
+      background: currentColor;
+      opacity: 0.8;
+    }
+    .tile.cell.sealed.correct .back::before { border-radius: 50%; opacity: 0.55; }
+    .tile.cell.sealed.present .back::before { transform: rotate(45deg); }
+    .tile.cell.sealed.absent .back::before { width: 36%; height: 4px; border-radius: 2px; }
+    .row.current .tile.cell:not(.filled):not(.revealed) .front { border-color: #62727b; }
+    .tile.pop .front { animation: pop 120ms ease; }
     .tile.dance { animation: dance 520ms ease; }
     .row.shake { animation: shake 480ms cubic-bezier(.36,.07,.19,.97); }
     @keyframes pop {
       0% { transform: scale(1); }
-      45% { transform: scale(1.1); }
+      45% { transform: scale(1.12); }
       100% { transform: scale(1); }
-    }
-    @keyframes flip {
-      0% { transform: rotateX(0); }
-      50% { transform: rotateX(-90deg); }
-      100% { transform: rotateX(0); }
     }
     @keyframes dance {
       0%, 100% { transform: translateY(0); }
@@ -297,6 +369,31 @@
       60% { transform: translateX(-3px); }
       72% { transform: translateX(2px); }
       84% { transform: translateX(-1px); }
+    }
+    .burst {
+      position: absolute;
+      left: 50%;
+      top: 46%;
+      width: 0;
+      height: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .burst i {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 7px;
+      height: 7px;
+      margin: -3px 0 0 -3px;
+      border-radius: 1px;
+      background: var(--gold);
+      transform: rotate(var(--a)) translateY(0);
+      animation: spark 680ms ease-out forwards;
+    }
+    .burst i:nth-child(odd) { background: var(--cream); width: 5px; height: 5px; }
+    @keyframes spark {
+      to { transform: rotate(var(--a)) translateY(calc(var(--d) * -1)); opacity: 0; }
     }
     .toast {
       position: absolute;
@@ -342,6 +439,11 @@
       user-select: none;
     }
     .key.wide { flex: 1.45 1 0; font-size: clamp(0.62rem, 2.5vw, 0.78rem); letter-spacing: 0.04em; }
+    .key.armed {
+      background: linear-gradient(180deg, #f3d79a, #d7a441);
+      color: #1a1408;
+    }
+    .key.pip { animation: pop 140ms ease; }
     .key:active { transform: scale(0.96); }
     .key.correct { background: var(--gold); color: #1a1408; }
     .key.present { background: var(--present); color: var(--cream); }
@@ -384,6 +486,7 @@
       color: var(--muted);
       font-size: 0.86rem;
     }
+    .stat.hot b { color: var(--gold); }
     .chips { display: flex; justify-content: center; gap: 5px; margin: 8px 0 4px; }
     .chip {
       width: 28px;
@@ -394,7 +497,29 @@
       font-weight: 700;
       background: var(--gold);
       color: #1a1408;
+      animation: pop 320ms cubic-bezier(.2, 1.3, .4, 1) both;
     }
+    .chip:nth-child(2) { animation-delay: 40ms; }
+    .chip:nth-child(3) { animation-delay: 80ms; }
+    .chip:nth-child(4) { animation-delay: 120ms; }
+    .chip:nth-child(5) { animation-delay: 160ms; }
+    .ribbon {
+      display: grid;
+      gap: 3px;
+      justify-content: center;
+      margin: 4px 0 2px;
+    }
+    .ribbon[hidden] { display: none !important; }
+    .ribbon-row { display: flex; gap: 3px; justify-content: center; }
+    .ribbon i {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      display: block;
+    }
+    .ribbon i.correct { background: var(--gold); box-shadow: inset 0 -3px 0 rgba(26, 20, 8, 0.35); }
+    .ribbon i.present { background: var(--present); box-shadow: inset 0 0 0 2px rgba(244, 239, 228, 0.35); }
+    .ribbon i.absent { background: var(--absent); }
     .share {
       width: 100%;
       height: 48px;
@@ -616,6 +741,7 @@
         <h2 id="result-title">Splendid</h2>
         <p class="detail" id="result-detail"></p>
         <div class="chips" id="chips" aria-hidden="true"></div>
+        <div class="ribbon" id="ribbon" hidden></div>
         <p class="countdown" id="countdown" hidden></p>
         <button class="share" id="share-btn" type="button">Share result</button>
         <pre class="fallback" id="share-fallback" hidden></pre>
@@ -797,8 +923,9 @@
       row.className = 'row';
       for (let c = 0; c < 5; c++) {
         const t = document.createElement('div');
-        t.className = 'tile';
+        t.className = 'tile cell';
         t.id = `t${r}${c}`;
+        t.innerHTML = '<span class="flipper"><span class="front glyph"></span><span class="back glyph"></span></span>';
         row.appendChild(t);
       }
       board.appendChild(row);
@@ -810,6 +937,7 @@
       r.className = 'kb-row';
       if (rowStr === 'ZXCVBNM') {
         const enter = document.createElement('button');
+        enter.id = 'key-enter';
         enter.className = 'key wide';
         enter.type = 'button';
         enter.textContent = 'ENTER';
@@ -820,6 +948,7 @@
         const btn = document.createElement('button');
         btn.className = 'key';
         btn.type = 'button';
+        btn.dataset.letter = k;
         btn.textContent = k;
         btn.addEventListener('click', () => handleKey(k));
         r.appendChild(btn);
@@ -846,7 +975,9 @@
       try { return JSON.parse(localStorage.getItem('rw-prefs') || '{"sound":true}'); }
       catch { return { sound: true }; }
     }
-    function savePrefs(p) { localStorage.setItem('rw-prefs', JSON.stringify(p)); }
+    function savePrefs(p) {
+      localStorage.setItem('rw-prefs', JSON.stringify(Object.assign(loadPrefs(), p)));
+    }
     let soundOn = loadPrefs().sound !== false;
     soundToggle.setAttribute('aria-checked', soundOn ? 'true' : 'false');
 
@@ -864,6 +995,8 @@
         document.getElementById(a).textContent = String(v);
         document.getElementById(b).textContent = String(v);
       }
+      document.getElementById('st-streak').closest('.stat').classList.toggle('hot', s.streak > 0);
+      document.getElementById('dg-streak').closest('.stat').classList.toggle('hot', s.streak > 0);
     }
     updateStats();
 
@@ -894,7 +1027,7 @@
       o.start(t);
       o.stop(t + dur + 0.02);
     }
-    function playTap() { blip(540, 0.035, 'triangle', 0.03); }
+    function playTap() { blip(500 + Math.random() * 90, 0.035, 'triangle', 0.03); }
     function playInvalid() { blip(110, 0.16, 'sine', 0.05); blip(78, 0.18, 'triangle', 0.03); }
     function playReveal(status) {
       const freq = status === 'correct' ? 640 : status === 'present' ? 460 : 196;
@@ -934,6 +1067,45 @@
       return id;
     }
 
+    function setGlyph(tile, ch) {
+      tile.querySelectorAll('.glyph').forEach((node) => { node.textContent = ch || ''; });
+    }
+    function markLive() {
+      document.querySelectorAll('.board .row').forEach((row, i) => {
+        row.classList.toggle('current', !gameOver && !revealing && i === currentRow);
+      });
+      const enter = document.getElementById('key-enter');
+      if (enter) enter.classList.toggle('armed', !gameOver && !revealing && currentCol === 5);
+    }
+    function paintRibbon() {
+      const ribbon = document.getElementById('ribbon');
+      ribbon.replaceChildren();
+      if (!lastResults.length) { ribbon.hidden = true; return; }
+      lastResults.forEach((row) => {
+        const line = document.createElement('div');
+        line.className = 'ribbon-row';
+        row.forEach((status) => {
+          const pip = document.createElement('i');
+          pip.className = status;
+          line.appendChild(pip);
+        });
+        ribbon.appendChild(line);
+      });
+      ribbon.hidden = false;
+    }
+    function burst() {
+      if (reduceMotion) return;
+      const layer = document.createElement('div');
+      layer.className = 'burst';
+      for (let i = 0; i < 12; i++) {
+        const spark = document.createElement('i');
+        spark.style.setProperty('--a', `${(i / 12) * 360}deg`);
+        spark.style.setProperty('--d', `${72 + (i % 4) * 16}px`);
+        layer.appendChild(spark);
+      }
+      document.querySelector('.board-wrap').appendChild(layer);
+      later(() => layer.remove(), 720);
+    }
     function hideResult() {
       resultEl.hidden = true;
       keyboardEl.hidden = false;
@@ -956,20 +1128,23 @@
         row.classList.remove('shake');
         for (let c = 0; c < 5; c++) {
           const t = document.getElementById(`t${r}${c}`);
-          t.textContent = '';
-          t.className = 'tile';
+          t.className = 'tile cell';
           t.style.animationDelay = '';
+          setGlyph(t, '');
         }
       }
-      document.querySelectorAll('.key').forEach((k) => { k.className = k.classList.contains('wide') ? 'key wide' : 'key'; });
+      document.querySelectorAll('.key').forEach((k) => {
+        k.classList.remove('correct', 'present', 'absent', 'pip', 'armed');
+      });
+      markLive();
     }
 
     function paintGrid(grid) {
       (grid || []).forEach((row, r) => {
         row.forEach((status, c) => {
           const tile = document.getElementById(`t${r}${c}`);
-          tile.textContent = '';
-          tile.className = 'tile revealed ' + status;
+          tile.className = 'tile cell revealed sealed ' + status;
+          setGlyph(tile, '');
         });
       });
     }
@@ -993,9 +1168,12 @@
       document.getElementById('result-title').textContent = won
         ? (PRAISE[Math.max(0, Math.min(5, guessesUsed - 1))] || 'Solved')
         : 'Not this time';
-      document.getElementById('result-detail').textContent = won
+      const record = loadStats();
+      let detail = won
         ? `Solved in ${guessesUsed} ${guessesUsed === 1 ? 'guess' : 'guesses'}`
         : 'Six guesses used';
+      if (won && mode === 'daily' && record.streak > 1) detail += ` · ${record.streak}-day streak`;
+      document.getElementById('result-detail').textContent = detail;
       const chips = document.getElementById('chips');
       chips.replaceChildren();
       for (const ch of target) {
@@ -1004,6 +1182,7 @@
         chip.textContent = ch;
         chips.appendChild(chip);
       }
+      paintRibbon();
       againBtn.textContent = mode === 'daily' ? 'Practice a word' : 'New word';
       keyboardEl.hidden = true;
       resultEl.hidden = false;
@@ -1054,6 +1233,7 @@
         target = m === 'daily' ? dailyWord() : WORDS[Math.floor(Math.random() * WORDS.length)];
         resetBoard();
       }
+      markLive();
       hubCall('ready');
     }
     btnDaily.addEventListener('click', () => { if (!revealing) setMode('daily'); });
@@ -1062,7 +1242,7 @@
 
     function updateTile(r, c) {
       const tile = document.getElementById(`t${r}${c}`);
-      tile.textContent = guesses[r][c];
+      setGlyph(tile, guesses[r][c]);
       tile.classList.toggle('filled', !!guesses[r][c]);
       if (guesses[r][c]) {
         tile.classList.remove('pop');
@@ -1085,6 +1265,7 @@
         currentCol++;
         playTap();
       }
+      markLive();
     }
     function evaluate(guess) {
       const res = Array(5).fill('absent');
@@ -1101,10 +1282,15 @@
     function colorKey(letter, status) {
       const priority = { correct: 3, present: 2, absent: 1 };
       document.querySelectorAll('.key').forEach((btn) => {
-        if (btn.textContent === letter) {
-          const cur = btn.classList.contains('correct') ? 3 : btn.classList.contains('present') ? 2 : btn.classList.contains('absent') ? 1 : 0;
-          if (priority[status] > cur) btn.className = 'key ' + status;
+        if (btn.dataset.letter !== letter) return;
+        const cur = btn.classList.contains('correct') ? 3 : btn.classList.contains('present') ? 2 : btn.classList.contains('absent') ? 1 : 0;
+        if (priority[status] > cur) {
+          btn.classList.remove('correct', 'present', 'absent');
+          btn.classList.add(status);
         }
+        btn.classList.remove('pip');
+        void btn.offsetWidth;
+        btn.classList.add('pip');
       });
     }
     function emojiGrid() {
@@ -1142,17 +1328,14 @@
       const motion = !reduceMotion;
       result.forEach((status, i) => {
         const tile = document.getElementById(`t${row}${i}`);
-        const delay = motion ? i * 280 : 0;
+        const delay = motion ? i * 260 : 0;
         later(() => {
-          if (motion) tile.classList.add('flipping');
+          tile.classList.add(status, 'revealed');
           playReveal(status);
-          later(() => {
-            tile.classList.add(status, 'revealed');
-            colorKey(guess[i], status);
-          }, motion ? 150 : 0);
+          colorKey(guess[i], status);
         }, delay);
       });
-      later(done, motion ? 5 * 280 + 340 : 30);
+      later(done, motion ? 4 * 260 + 500 : 30);
     }
     function bounceRow(row) {
       if (reduceMotion) return;
@@ -1225,11 +1408,14 @@
       const rowIndex = currentRow;
       const outcome = commitGuess(guess);
       revealing = true;
+      markLive();
       revealRow(rowIndex, guess, result, () => {
         revealing = false;
+        markLive();
         if (!outcome) return;
         if (outcome.won) {
           bounceRow(outcome.row);
+          burst();
           playWin();
         } else {
           playLose();
@@ -1251,9 +1437,13 @@
       else if (/^[a-zA-Z]$/.test(e.key)) { e.preventDefault(); handleKey(e.key.toUpperCase()); }
     });
 
-    document.getElementById('info-btn').addEventListener('click', () => {
+    const infoBtn = document.getElementById('info-btn');
+    if (!loadPrefs().seenHow) infoBtn.classList.add('hint');
+    infoBtn.addEventListener('click', () => {
       updateStats();
       info.hidden = false;
+      infoBtn.classList.remove('hint');
+      savePrefs({ seenHow: true });
     });
     document.getElementById('info-close').addEventListener('click', closeInfo);
     info.addEventListener('click', (e) => { if (e.target === info) closeInfo(); });
