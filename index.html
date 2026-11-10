@@ -2,155 +2,270 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Rokumon Word</title>
   <style>
-    :root { --bg: #121213; --fg: #fff; --absent: #3a3a3c; --present: #b59f3b; --correct: #538d4e; }
-    body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 1rem; }
-    h1 { margin: 0 0 1rem; font-size: 1.5rem; }
-    .board { display: grid; grid-template-rows: repeat(6, 1fr); gap: 6px; margin-bottom: 1rem; }
-    .row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-    .tile { width: 52px; height: 52px; border: 2px solid #3a3a3c; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; font-weight: 700; text-transform: uppercase; }
-    .tile.correct { background: var(--correct); border-color: var(--correct); }
-    .tile.present { background: var(--present); border-color: var(--present); }
-    .tile.absent { background: var(--absent); border-color: var(--absent); }
-    .keyboard { display: flex; flex-direction: column; gap: 6px; }
-    .kb-row { display: flex; gap: 6px; justify-content: center; }
-    .key { min-width: 36px; height: 48px; padding: 0 8px; background: #818384; border: 0; border-radius: 4px; color: #fff; font-weight: 600; cursor: pointer; }
-    .key.correct { background: var(--correct); }
-    .key.present { background: var(--present); }
-    .key.absent { background: var(--absent); }
-    .message { min-height: 1.5rem; margin: 0.5rem 0; font-weight: 600; }
+    :root { --bg:#121213; --fg:#fff; --absent:#3a3a3c; --present:#b59f3b; --correct:#538d4e; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; min-height:100vh; padding:0.75rem; }
+    h1 { margin:0.4rem 0; font-size:1.5rem; }
+    .top { display:flex; gap:0.6rem; margin-bottom:0.5rem; flex-wrap:wrap; justify-content:center; }
+    .top button { padding:0.4rem 0.8rem; border:0; border-radius:6px; background:#3a3a3c; color:#fff; cursor:pointer; font-weight:600; }
+    .top button.active { background:#538d4e; }
+    .stats { font-size:0.9rem; opacity:0.85; margin-bottom:0.5rem; text-align:center; }
+    .message { min-height:1.4rem; margin:0.3rem 0; font-weight:600; text-align:center; }
+    .board { display:grid; grid-template-rows:repeat(6,1fr); gap:5px; margin-bottom:0.75rem; }
+    .row { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; }
+    .tile { width:50px; height:50px; border:2px solid #3a3a3c; display:flex; align-items:center; justify-content:center; font-size:1.35rem; font-weight:700; text-transform:uppercase; transition:transform .15s; }
+    .tile.flip { transform:rotateX(90deg); }
+    .tile.correct { background:var(--correct); border-color:var(--correct); }
+    .tile.present { background:var(--present); border-color:var(--present); }
+    .tile.absent { background:var(--absent); border-color:var(--absent); }
+    .keyboard { display:flex; flex-direction:column; gap:5px; }
+    .kb-row { display:flex; gap:4px; justify-content:center; }
+    .key { min-width:32px; height:46px; padding:0 6px; background:#818384; border:0; border-radius:4px; color:#fff; font-weight:600; cursor:pointer; font-size:0.85rem; }
+    .key.correct { background:var(--correct); }
+    .key.present { background:var(--present); }
+    .key.absent { background:var(--absent); }
+    @media (max-width:400px) { .tile { width:42px; height:42px; font-size:1.1rem; } .key { min-width:26px; height:40px; font-size:0.75rem; } }
   </style>
 </head>
 <body>
   <h1>Rokumon Word</h1>
+  <div class="top">
+    <button id="btn-daily" class="active">Daily</button>
+    <button id="btn-practice">Practice</button>
+  </div>
+  <div class="stats" id="stats">Played: 0 | Win%: — | Streak: 0</div>
   <div class="message" id="message"></div>
   <div class="board" id="board"></div>
   <div class="keyboard" id="keyboard"></div>
+
   <script>
-    const WORDS = ['ROKUM','BRAIN','TRAIN','SCORE','QUEST','STREAK','GAMES','ALPHA','BETA','LEVEL','MEMORY','REACT','WORD','DAILY','PLAY'];
-    const TARGET = WORDS[Math.floor(Math.random() * WORDS.length)]; // prototype: random; later date-seeded
+    // Compact common 5-letter list (expandable)
+    const WORDS = [
+      'CRANE','SLATE','TRACE','ROAST','ADIEU','AUDIO','ARISE','STARE','CRATE','BRAIN',
+      'TRAIN','SCORE','QUEST','GAMES','ALPHA','LEVEL','DAILY','HEART','LIGHT','GREEN',
+      'PLANT','WORLD','WATER','EARTH','SPACE','STORM','SMILE','CLOUD','RIVER','STONE',
+      'SHARE','SHINE','SHORT','SMART','SMALL','SPEED','SPOKE','STAGE','STAND','START',
+      'STATE','STEAL','STEAM','STEEL','STICK','STILL','STONE','STORE','STORY','SWEET',
+      'TABLE','THINK','THREE','THROW','TIGER','TOAST','TODAY','TOKEN','TOUCH','TOUGH',
+      'TOWER','TRACK','TRADE','TRAIL','TRAIN','TREAT','TREND','TRIAL','TRICK','TRIED',
+      'TRUST','TRUTH','TWICE','UNDER','UNION','UNITY','UNTIL','UPPER','USAGE','USUAL',
+      'VALUE','VIDEO','VIRUS','VISIT','VOICE','WATCH','WATER','WEARY','WHICH','WHILE',
+      'WHITE','WHOLE','WHOSE','WOMAN','WORLD','WORRY','WORSE','WORTH','WOULD','WRITE',
+      'WRONG','YOUNG','YOUTH','ABOUT','ABOVE','ABUSE','ACTOR','ACUTE','ADMIT','ADOPT',
+      'ADULT','AFTER','AGAIN','AGENT','AGREE','AHEAD','ALARM','ALBUM','ALERT','ALIEN',
+      'ALIGN','ALIKE','ALIVE','ALLOW','ALONE','ALONG','ALTER','AMONG','ANGER','ANGLE',
+      'ANGRY','APART','APPLE','APPLY','ARENA','ARGUE','ARISE','ARRAY','ASIDE','ASSET',
+      'AVOID','AWAKE','AWARD','AWARE','BADLY','BASIC','BEACH','BEGAN','BEGIN','BEING',
+      'BELOW','BENCH','BILLY','BIRTH','BLACK','BLAME','BLIND','BLOCK','BLOOD','BOARD',
+      'BOOST','BOOTH','BOUND','BRAIN','BRAND','BREAD','BREAK','BREED','BRIEF','BRING',
+      'BROAD','BROKE','BROWN','BUILD','BUILT','BUYER','CABLE','CALIF','CARRY','CATCH',
+      'CAUSE','CHAIN','CHAIR','CHAOS','CHARM','CHART','CHASE','CHEAP','CHECK','CHEST',
+      'CHIEF','CHILD','CHINA','CHOSE','CIVIL','CLAIM','CLASS','CLEAN','CLEAR','CLICK',
+      'CLIMB','CLOCK','CLOSE','CLOUD','COACH','COAST','COULD','COUNT','COURT','COVER',
+      'CRAFT','CRASH','CRAZY','CREAM','CRIME','CROSS','CROWD','CROWN','CRUDE','CURVE',
+      'CYCLE','DAILY','DANCE','DATED','DEALT','DEATH','DEBUT','DELAY','DEPTH','DOING',
+      'DOUBT','DOZEN','DRAFT','DRAMA','DRAWN','DREAM','DRESS','DRINK','DRIVE','DROVE',
+      'DYING','EAGER','EARLY','EARTH','EIGHT','ELITE','EMPTY','ENEMY','ENJOY','ENTER',
+      'ENTRY','EQUAL','ERROR','EVENT','EVERY','EXACT','EXIST','EXTRA','FAITH','FALSE',
+      'FAULT','FIBER','FIELD','FIFTH','FIFTY','FIGHT','FINAL','FIRST','FIXED','FLASH',
+      'FLEET','FLOOR','FLUID','FOCUS','FORCE','FORTH','FORTY','FORUM','FOUND','FRAME',
+      'FRANK','FRAUD','FRESH','FRONT','FROST','FRUIT','FULLY','FUNNY','GIANT','GIVEN',
+      'GLASS','GLOBE','GOING','GRACE','GRADE','GRAND','GRANT','GRASS','GRAVE','GREAT',
+      'GREEN','GROSS','GROUP','GROWN','GUARD','GUESS','GUEST','GUIDE','HAPPY','HARRY',
+      'HEART','HEAVY','HENCE','HENRY','HORSE','HOTEL','HOUSE','HUMAN','IDEAL','IMAGE',
+      'INDEX','INNER','INPUT','ISSUE','JAPAN','JIMMY','JOINT','JONES','JUDGE','KNOWN',
+      'LABEL','LARGE','LASER','LATER','LAUGH','LAYER','LEARN','LEASE','LEAST','LEAVE',
+      'LEGAL','LEVEL','LEWIS','LIGHT','LIMIT','LINKS','LIVES','LOCAL','LOOSE','LOWER',
+      'LUCKY','LUNCH','LYING','MAGIC','MAJOR','MAKER','MARCH','MARIA','MATCH','MAYBE',
+      'MAYOR','MEANT','MEDIA','METAL','MIGHT','MINOR','MINUS','MIXED','MODEL','MONEY',
+      'MONTH','MORAL','MOTOR','MOUNT','MOUSE','MOUTH','MOVED','MOVIE','MUSIC','NEEDS',
+      'NEVER','NEWLY','NIGHT','NOISE','NORTH','NOTED','NOVEL','NURSE','OCCUR','OCEAN',
+      'OFFER','OFTEN','ORDER','OTHER','OUGHT','PAINT','PANEL','PAPER','PARTY','PEACE',
+      'PETER','PHASE','PHONE','PHOTO','PIECE','PILOT','PITCH','PLACE','PLAIN','PLANE',
+      'PLANT','PLATE','POINT','POUND','POWER','PRESS','PRICE','PRIDE','PRIME','PRINT',
+      'PRIOR','PRIZE','PROOF','PROUD','PROVE','QUEEN','QUICK','QUIET','QUITE','RADIO',
+      'RAISE','RANGE','RAPID','RATIO','REACH','READY','REALM','REBEL','REFER','RELAX',
+      'REPAY','REPLY','RIGHT','RIVAL','RIVER','ROBIN','ROGER','ROMAN','ROUGH','ROUND',
+      'ROUTE','ROYAL','RURAL','SCALE','SCENE','SCOPE','SCORE','SENSE','SERVE','SEVEN',
+      'SHALL','SHAPE','SHARE','SHARP','SHEET','SHELF','SHELL','SHIFT','SHINE','SHIRT',
+      'SHOCK','SHOOT','SHORT','SHOWN','SIGHT','SINCE','SIXTH','SIXTY','SIZED','SKILL',
+      'SLEEP','SLIDE','SMALL','SMART','SMILE','SMITH','SMOKE','SOLID','SOLVE','SORRY',
+      'SOUND','SOUTH','SPACE','SPARE','SPEAK','SPEED','SPEND','SPENT','SPLIT','SPOKE',
+      'SPORT','STAFF','STAGE','STAKE','STAND','START','STATE','STEAM','STEEL','STEEP',
+      'STEER','STEVE','STICK','STILL','STOCK','STONE','STOOD','STORE','STORM','STORY',
+      'STRIP','STUCK','STUDY','STUFF','STYLE','SUGAR','SUITE','SUPER','SWEET','TABLE',
+      'TAKEN','TASTE','TAXES','TEACH','TERRY','TEXAS','THANK','THEFT','THEIR','THEME',
+      'THERE','THESE','THICK','THING','THINK','THIRD','THOSE','THREE','THREW','THROW',
+      'TIGHT','TIMES','TIRED','TITLE','TODAY','TOPIC','TOTAL','TOUCH','TOUGH','TOWER',
+      'TRACK','TRADE','TRAIN','TREAT','TREND','TRIAL','TRIBE','TRICK','TRIED','TRIES',
+      'TRUCK','TRULY','TRUNK','TRUST','TRUTH','TWICE','UNDER','UNDUE','UNION','UNITY',
+      'UNTIL','UPPER','UPSET','URBAN','USAGE','USUAL','VALID','VALUE','VIDEO','VIRUS',
+      'VISIT','VITAL','VOCAL','VOICE','WASTE','WATCH','WATER','WHEEL','WHERE','WHICH',
+      'WHILE','WHITE','WHOLE','WHOSE','WOMAN','WOMEN','WORLD','WORRY','WORSE','WORST',
+      'WORTH','WOULD','WOUND','WRITE','WRONG','WROTE','YIELD','YOUNG','YOUTH'
+    ];
+    const WORD_SET = new Set(WORDS);
+
+    function dateSeed() {
+      const d = new Date();
+      return d.getFullYear() * 10000 + (d.getMonth()+1) * 100 + d.getDate();
+    }
+    function mulberry32(a) {
+      return function() {
+        let t = a += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+    function dailyWord() {
+      const rng = mulberry32(dateSeed());
+      return WORDS[Math.floor(rng() * WORDS.length)];
+    }
+
+    let mode = 'daily';
+    let target = dailyWord();
+    let guesses = Array.from({length:6}, () => Array(5).fill(''));
+    let currentRow = 0, currentCol = 0, gameOver = false;
+
     const board = document.getElementById('board');
     const message = document.getElementById('message');
-    let guesses = Array.from({length: 6}, () => Array(5).fill(''));
-    let currentRow = 0;
-    let currentCol = 0;
-    let gameOver = false;
+    const statsEl = document.getElementById('stats');
+    const btnDaily = document.getElementById('btn-daily');
+    const btnPractice = document.getElementById('btn-practice');
 
     for (let r = 0; r < 6; r++) {
-      const row = document.createElement('div');
-      row.className = 'row';
+      const row = document.createElement('div'); row.className = 'row';
       for (let c = 0; c < 5; c++) {
-        const tile = document.createElement('div');
-        tile.className = 'tile';
-        tile.id = `t${r}${c}`;
-        row.appendChild(tile);
+        const t = document.createElement('div'); t.className = 'tile'; t.id = `t${r}${c}`;
+        row.appendChild(t);
       }
       board.appendChild(row);
     }
 
     const KEYS = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
     const kb = document.getElementById('keyboard');
-    KEYS.forEach(row => {
-      const r = document.createElement('div');
-      r.className = 'kb-row';
-      for (const k of row) {
-        const btn = document.createElement('button');
-        btn.className = 'key';
-        btn.textContent = k;
+    KEYS.forEach(rowStr => {
+      const r = document.createElement('div'); r.className = 'kb-row';
+      for (const k of rowStr) {
+        const btn = document.createElement('button'); btn.className = 'key'; btn.textContent = k;
         btn.addEventListener('click', () => handleKey(k));
         r.appendChild(btn);
       }
-      if (row === 'ZXCVBNM') {
-        const enter = document.createElement('button');
-        enter.className = 'key';
-        enter.textContent = 'ENTER';
+      if (rowStr === 'ZXCVBNM') {
+        const enter = document.createElement('button'); enter.className = 'key'; enter.textContent = 'ENTER';
         enter.addEventListener('click', submit);
-        const del = document.createElement('button');
-        del.className = 'key';
-        del.textContent = '⌫';
+        const del = document.createElement('button'); del.className = 'key'; del.textContent = '⌫';
         del.addEventListener('click', () => handleKey('Backspace'));
-        r.prepend(enter);
-        r.append(del);
+        r.prepend(enter); r.append(del);
       }
       kb.appendChild(r);
     });
 
-    function hubCall(method, ...args) {
-      try {
-        const sdk = window.Hub;
-        if (typeof sdk?.[method] === 'function') sdk[method](...args);
-      } catch {}
+    const hubCall = (method, ...args) => { try { const s = window.Hub; if (typeof s?.[method] === 'function') s[method](...args); } catch {} };
+
+    function loadStats() {
+      return JSON.parse(localStorage.getItem('rw-stats') || '{"played":0,"wins":0,"streak":0,"maxStreak":0,"lastDaily":""}');
     }
+    function saveStats(s) { localStorage.setItem('rw-stats', JSON.stringify(s)); }
+    function updateStats() {
+      const s = loadStats();
+      const pct = s.played ? Math.round(s.wins / s.played * 100) : 0;
+      statsEl.textContent = `Played: ${s.played} | Win%: ${pct}% | Streak: ${s.streak}`;
+    }
+    updateStats();
+
+    function resetBoard() {
+      guesses = Array.from({length:6}, () => Array(5).fill(''));
+      currentRow = 0; currentCol = 0; gameOver = false;
+      message.textContent = '';
+      for (let r = 0; r < 6; r++) for (let c = 0; c < 5; c++) {
+        const t = document.getElementById(`t${r}${c}`);
+        t.textContent = ''; t.className = 'tile';
+      }
+      document.querySelectorAll('.key').forEach(k => k.className = 'key');
+    }
+
+    function setMode(m) {
+      mode = m;
+      btnDaily.classList.toggle('active', m === 'daily');
+      btnPractice.classList.toggle('active', m === 'practice');
+      target = m === 'daily' ? dailyWord() : WORDS[Math.floor(Math.random()*WORDS.length)];
+      resetBoard();
+      hubCall('ready');
+    }
+    btnDaily.addEventListener('click', () => setMode('daily'));
+    btnPractice.addEventListener('click', () => setMode('practice'));
 
     function updateTile(r, c) {
-      const tile = document.getElementById(`t${r}${c}`);
-      tile.textContent = guesses[r][c];
+      document.getElementById(`t${r}${c}`).textContent = guesses[r][c];
     }
-
     function handleKey(k) {
       if (gameOver) return;
       if (k === 'Backspace') {
-        if (currentCol > 0) {
-          currentCol--;
-          guesses[currentRow][currentCol] = '';
-          updateTile(currentRow, currentCol);
-        }
+        if (currentCol > 0) { currentCol--; guesses[currentRow][currentCol] = ''; updateTile(currentRow, currentCol); }
       } else if (/^[A-Z]$/.test(k) && currentCol < 5) {
-        guesses[currentRow][currentCol] = k;
-        updateTile(currentRow, currentCol);
-        currentCol++;
+        guesses[currentRow][currentCol] = k; updateTile(currentRow, currentCol); currentCol++;
       }
     }
-
+    function evaluate(guess) {
+      const res = Array(5).fill('absent');
+      const targetArr = target.split('');
+      const used = Array(5).fill(false);
+      for (let i = 0; i < 5; i++) if (guess[i] === target[i]) { res[i] = 'correct'; used[i] = true; }
+      for (let i = 0; i < 5; i++) {
+        if (res[i] === 'correct') continue;
+        const idx = targetArr.findIndex((ch, j) => ch === guess[i] && !used[j]);
+        if (idx !== -1) { res[i] = 'present'; used[idx] = true; }
+      }
+      return res;
+    }
+    function colorKey(letter, status) {
+      const priority = { correct: 3, present: 2, absent: 1 };
+      document.querySelectorAll('.key').forEach(btn => {
+        if (btn.textContent === letter) {
+          const cur = btn.classList.contains('correct') ? 3 : btn.classList.contains('present') ? 2 : btn.classList.contains('absent') ? 1 : 0;
+          if (priority[status] > cur) btn.className = 'key ' + status;
+        }
+      });
+    }
     function submit() {
       if (gameOver || currentCol < 5) return;
       const guess = guesses[currentRow].join('');
+      if (!WORD_SET.has(guess)) { message.textContent = 'Not in word list'; return; }
+      message.textContent = '';
       const result = evaluate(guess);
       result.forEach((status, i) => {
         const tile = document.getElementById(`t${currentRow}${i}`);
         tile.classList.add(status);
-        // simple key coloring
-        document.querySelectorAll('.key').forEach(btn => {
-          if (btn.textContent === guess[i]) btn.classList.add(status);
-        });
+        colorKey(guess[i], status);
       });
-      if (guess === TARGET) {
-        message.textContent = 'Solved!';
+      const s = loadStats();
+      if (guess === target) {
+        message.textContent = mode === 'daily' ? 'Daily solved!' : 'Solved!';
         gameOver = true;
-        hubCall('score', 6 - currentRow);
-        hubCall('event', 'puzzle-completed', { guesses: currentRow + 1, daily: false });
-        hubCall('gameOver', 6 - currentRow, 0);
+        s.played++; s.wins++;
+        if (mode === 'daily') {
+          const today = new Date().toISOString().slice(0,10);
+          if (s.lastDaily !== today) { s.streak++; s.lastDaily = today; if (s.streak > s.maxStreak) s.maxStreak = s.streak; }
+        }
+        saveStats(s); updateStats();
+        hubCall('score', 7 - (currentRow + 1));
+        hubCall('event', 'puzzle-completed', { guesses: currentRow + 1, daily: mode === 'daily', streak: s.streak });
+        hubCall('gameOver', 7 - (currentRow + 1), 0);
       } else if (currentRow === 5) {
-        message.textContent = `The word was ${TARGET}`;
+        message.textContent = `The word was ${target}`;
         gameOver = true;
+        s.played++;
+        if (mode === 'daily') s.streak = 0;
+        saveStats(s); updateStats();
         hubCall('gameOver', 0, 0);
       } else {
-        currentRow++;
-        currentCol = 0;
+        currentRow++; currentCol = 0;
       }
-    }
-
-    function evaluate(guess) {
-      const res = Array(5).fill('absent');
-      const targetArr = TARGET.split('');
-      const used = Array(5).fill(false);
-      for (let i = 0; i < 5; i++) {
-        if (guess[i] === TARGET[i]) {
-          res[i] = 'correct';
-          used[i] = true;
-        }
-      }
-      for (let i = 0; i < 5; i++) {
-        if (res[i] === 'correct') continue;
-        const idx = targetArr.findIndex((ch, j) => ch === guess[i] && !used[j]);
-        if (idx !== -1) {
-          res[i] = 'present';
-          used[idx] = true;
-        }
-      }
-      return res;
     }
 
     document.addEventListener('keydown', e => {
@@ -159,6 +274,8 @@
       else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key.toUpperCase());
     });
 
+    // Init daily
+    setMode('daily');
     hubCall('ready');
   </script>
 </body>
