@@ -14,7 +14,7 @@ A daily five-letter word puzzle for the Rokumon catalogue. One shared word each 
 5. A short guess shakes the row (“Not enough letters”). A word that is not in the list shakes too.
 6. **Daily** locks after a win or a loss until the next local midnight. **Practice** deals another word immediately. The info button explains both modes and shows your record.
 
-The on-screen keyboard and a physical keyboard both work. The layout fits a phone width without sideways scrolling.
+The on-screen keyboard and a physical keyboard both work. The layout fits a phone width without sideways scrolling. The display and interface faces are embedded in the file, so the type stays the same when third-party font hosts are blocked.
 
 ## Share
 
