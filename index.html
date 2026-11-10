@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rokumon Word</title>
+  <style>
+    :root { --bg: #121213; --fg: #fff; --absent: #3a3a3c; --present: #b59f3b; --correct: #538d4e; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 1rem; }
+    h1 { margin: 0 0 1rem; font-size: 1.5rem; }
+    .board { display: grid; grid-template-rows: repeat(6, 1fr); gap: 6px; margin-bottom: 1rem; }
+    .row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .tile { width: 52px; height: 52px; border: 2px solid #3a3a3c; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; font-weight: 700; text-transform: uppercase; }
+    .tile.correct { background: var(--correct); border-color: var(--correct); }
+    .tile.present { background: var(--present); border-color: var(--present); }
+    .tile.absent { background: var(--absent); border-color: var(--absent); }
+    .keyboard { display: flex; flex-direction: column; gap: 6px; }
+    .kb-row { display: flex; gap: 6px; justify-content: center; }
+    .key { min-width: 36px; height: 48px; padding: 0 8px; background: #818384; border: 0; border-radius: 4px; color: #fff; font-weight: 600; cursor: pointer; }
+    .key.correct { background: var(--correct); }
+    .key.present { background: var(--present); }
+    .key.absent { background: var(--absent); }
+    .message { min-height: 1.5rem; margin: 0.5rem 0; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Rokumon Word</h1>
+  <div class="message" id="message"></div>
+  <div class="board" id="board"></div>
+  <div class="keyboard" id="keyboard"></div>
+  <script>
+    const WORDS = ['ROKUM','BRAIN','TRAIN','SCORE','QUEST','STREAK','GAMES','ALPHA','BETA','LEVEL','MEMORY','REACT','WORD','DAILY','PLAY'];
+    const TARGET = WORDS[Math.floor(Math.random() * WORDS.length)]; // prototype: random; later date-seeded
+    const board = document.getElementById('board');
+    const message = document.getElementById('message');
+    let guesses = Array.from({length: 6}, () => Array(5).fill(''));
+    let currentRow = 0;
+    let currentCol = 0;
+    let gameOver = false;
+
+    for (let r = 0; r < 6; r++) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      for (let c = 0; c < 5; c++) {
+        const tile = document.createElement('div');
+        tile.className = 'tile';
+        tile.id = `t${r}${c}`;
+        row.appendChild(tile);
+      }
+      board.appendChild(row);
+    }
+
+    const KEYS = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+    const kb = document.getElementById('keyboard');
+    KEYS.forEach(row => {
+      const r = document.createElement('div');
+      r.className = 'kb-row';
+      for (const k of row) {
+        const btn = document.createElement('button');
+        btn.className = 'key';
+        btn.textContent = k;
+        btn.addEventListener('click', () => handleKey(k));
+        r.appendChild(btn);
+      }
+      if (row === 'ZXCVBNM') {
+        const enter = document.createElement('button');
+        enter.className = 'key';
+        enter.textContent = 'ENTER';
+        enter.addEventListener('click', submit);
+        const del = document.createElement('button');
+        del.className = 'key';
+        del.textContent = '⌫';
+        del.addEventListener('click', () => handleKey('Backspace'));
+        r.prepend(enter);
+        r.append(del);
+      }
+      kb.appendChild(r);
+    });
+
+    function hubCall(method, ...args) {
+      try {
+        const sdk = window.Hub;
+        if (typeof sdk?.[method] === 'function') sdk[method](...args);
+      } catch {}
+    }
+
+    function updateTile(r, c) {
+      const tile = document.getElementById(`t${r}${c}`);
+      tile.textContent = guesses[r][c];
+    }
+
+    function handleKey(k) {
+      if (gameOver) return;
+      if (k === 'Backspace') {
+        if (currentCol > 0) {
+          currentCol--;
+          guesses[currentRow][currentCol] = '';
+          updateTile(currentRow, currentCol);
+        }
+      } else if (/^[A-Z]$/.test(k) && currentCol < 5) {
+        guesses[currentRow][currentCol] = k;
+        updateTile(currentRow, currentCol);
+        currentCol++;
+      }
+    }
+
+    function submit() {
+      if (gameOver || currentCol < 5) return;
+      const guess = guesses[currentRow].join('');
+      const result = evaluate(guess);
+      result.forEach((status, i) => {
+        const tile = document.getElementById(`t${currentRow}${i}`);
+        tile.classList.add(status);
+        // simple key coloring
+        document.querySelectorAll('.key').forEach(btn => {
+          if (btn.textContent === guess[i]) btn.classList.add(status);
+        });
+      });
+      if (guess === TARGET) {
+        message.textContent = 'Solved!';
+        gameOver = true;
+        hubCall('score', 6 - currentRow);
+        hubCall('event', 'puzzle-completed', { guesses: currentRow + 1, daily: false });
+        hubCall('gameOver', 6 - currentRow, 0);
+      } else if (currentRow === 5) {
+        message.textContent = `The word was ${TARGET}`;
+        gameOver = true;
+        hubCall('gameOver', 0, 0);
+      } else {
+        currentRow++;
+        currentCol = 0;
+      }
+    }
+
+    function evaluate(guess) {
+      const res = Array(5).fill('absent');
+      const targetArr = TARGET.split('');
+      const used = Array(5).fill(false);
+      for (let i = 0; i < 5; i++) {
+        if (guess[i] === TARGET[i]) {
+          res[i] = 'correct';
+          used[i] = true;
+        }
+      }
+      for (let i = 0; i < 5; i++) {
+        if (res[i] === 'correct') continue;
+        const idx = targetArr.findIndex((ch, j) => ch === guess[i] && !used[j]);
+        if (idx !== -1) {
+          res[i] = 'present';
+          used[idx] = true;
+        }
+      }
+      return res;
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') submit();
+      else if (e.key === 'Backspace') handleKey('Backspace');
+      else if (/^[a-zA-Z]$/.test(e.key)) handleKey(e.key.toUpperCase());
+    });
+
+    hubCall('ready');
+  </script>
+</body>
+</html>
