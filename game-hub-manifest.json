@@ -1,0 +1,63 @@
+{
+  "slug": "rokumon-word",
+  "title": "Rokumon Word",
+  "tagline": "Daily-style word puzzle.",
+  "description": "Guess the five-letter word with colour feedback. Daily and practice modes, streak and score ready.",
+  "status": "prototype",
+  "visibility": "unlisted",
+  "featured": false,
+  "version": "0.1.0",
+  "releasedAt": null,
+  "updatedAt": "2026-11-10",
+  "delivery": {
+    "mode": "embedded",
+    "release": "0.1.0",
+    "budget": { "maxBundleBytes": 1048576, "maxFiles": 8 }
+  },
+  "genres": ["Puzzle", "Word"],
+  "tags": ["wordle", "daily", "word", "short-session", "mobile", "single-player"],
+  "controls": ["keyboard", "mouse", "touch"],
+  "players": { "min": 1, "max": 1 },
+  "support": { "desktop": "full", "mobile": "full" },
+  "media": {
+    "cover": null,
+    "hero": null,
+    "logo": null,
+    "screenshots": []
+  },
+  "theme": { "accent": "#538d4e", "background": "#121213" },
+  "credits": {
+    "developer": "Rokumon Games",
+    "art": null,
+    "audio": null
+  },
+  "runtime": {
+    "kind": "iframe",
+    "entry": "/games/rokumon-word/index.html",
+    "trust": "first-party",
+    "orientation": "any",
+    "allowFullscreen": true,
+    "pointerLock": false
+  },
+  "bridge": {
+    "version": 1,
+    "enabled": true,
+    "capabilities": ["score", "event"],
+    "events": [
+      {
+        "name": "puzzle-completed",
+        "properties": {
+          "guesses": "number",
+          "daily": "boolean"
+        }
+      }
+    ]
+  },
+  "source": {
+    "repo": "https://github.com/SarutobiSasuke8/rokumon-word",
+    "localPath": null,
+    "bundlePath": null,
+    "bundleIncludes": null,
+    "buildCommand": null
+  }
+}
