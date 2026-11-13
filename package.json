@@ -1,0 +1,18 @@
+{
+  "name": "rokumon-word-dev",
+  "private": true,
+  "version": "1.0.3",
+  "description": "Development checks for Rokumon Word. The game itself is index.html and needs none of this to run.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/core.test.mjs tests/page.test.mjs",
+    "smoke": "node tests/smoke.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "31.0.1",
+    "playwright": "1.64.0"
+  }
+}
