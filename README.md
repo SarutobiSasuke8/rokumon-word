@@ -97,12 +97,12 @@ Both run on every pull request (`.github/workflows/ci.yml`). The pure rules live
 
 ## Hub bridge
 
-If the host page installs `window.Hub`, the game calls it and ignores a missing bridge so the file still runs on its own:
+The game speaks hub bridge version 1 (`public/hub-bridge.js` in the hub repo). If the page has `window.Hub`, the game calls it. If not, and the game is inside a frame, it posts the same messages itself to its own origin (`hub:ready`, `hub:score`, `hub:event`, `hub:gameover`), so the hub hears it without this file loading anything. Opened on its own, every call does nothing.
 
 - `Hub.ready()` when a mode becomes ready (also once at startup, and again when a new day's word is dealt)
 - `Hub.score(n)` on a win, where `n` is `7 - guesses`
 - `Hub.event('puzzle-completed', { guesses, daily, streak })` on a win
-- `Hub.gameOver(score, 0)` on a win (`score` as above) or a loss (`0`)
+- `Hub.gameOver(score, durationMs)` on a win (`score` as above) or a loss (`0`), with the time since the round was dealt
 
 ## Catalogue
 

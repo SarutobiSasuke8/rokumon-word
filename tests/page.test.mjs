@@ -19,7 +19,7 @@ afterEach(() => { while (opened.length) opened.pop().close(); });
  * Open the page at a fixed local date and time. `storage` seeds localStorage; pass
  * `{ blocked: true }` to make every storage call throw, as in a sandboxed frame.
  */
-function open({ at = new Date(2026, 10, 13, 12, 0, 0), storage = {}, blocked = false, hub = null } = {}) {
+function open({ at = new Date(2026, 10, 13, 12, 0, 0), storage = {}, blocked = false, hub = null, parent = null } = {}) {
   const errors = [];
   const dom = new JSDOM(html, {
     runScripts: 'dangerously',
@@ -37,6 +37,7 @@ function open({ at = new Date(2026, 10, 13, 12, 0, 0), storage = {}, blocked = f
       window.matchMedia = () => ({ matches: true, addEventListener() {}, removeEventListener() {} }); // reduced motion: reveals are instant
       window.addEventListener('error', (event) => errors.push(event.error || event.message));
       if (hub) window.Hub = hub;
+      if (parent) Object.defineProperty(window, 'parent', { value: parent, configurable: true });
       for (const [key, value] of Object.entries(storage)) window.localStorage.setItem(key, value);
       if (blocked) {
         const refuse = () => { throw new window.DOMException('blocked', 'SecurityError'); };
@@ -92,10 +93,42 @@ test('loads clean and plays a daily win through the on-screen keys', async () =>
   assert.equal(page.stats().lastDaily, DAY);
   assert.equal(page.stat('st-played'), '1');
   assert.equal(page.stat('st-streak'), '1');
-  assert.deepEqual(JSON.parse(JSON.stringify(calls.filter((c) => c[0] !== 'ready'))), [['score', 5], ['event', 'puzzle-completed', { guesses: 2, daily: true, streak: 1 }], ['gameOver', 5, 0]]);
+  const sent = JSON.parse(JSON.stringify(calls.filter((c) => c[0] !== 'ready')));
+  assert.deepEqual(sent.slice(0, 2), [['score', 5], ['event', 'puzzle-completed', { guesses: 2, daily: true, streak: 1 }]]);
+  assert.equal(sent[2][0], 'gameOver');
+  assert.equal(sent[2][1], 5);
+  assert.ok(Number.isFinite(sent[2][2]) && sent[2][2] >= 0, 'gameOver carries a duration');
+  assert.equal(sent.length, 3);
   assert.match(page.document.getElementById('sr-log').textContent, /Solved in 2/);
   assert.equal(page.row(1)[0].getAttribute('aria-label'), `${TARGET[0]}, right place`);
   assert.deepEqual(page.errors, []);
+  page.close();
+});
+
+test('framed without window.Hub, it posts the hub bridge v1 messages to its own origin', async () => {
+  const messages = [];
+  const page = open({ parent: { postMessage: (payload, origin) => messages.push([JSON.parse(JSON.stringify(payload)), origin]) } });
+  await page.type(TARGET);
+  const origin = 'https://games.example';
+  assert.ok(messages.every(([, to]) => to === origin), 'every message is addressed to the game\'s own origin');
+  const types = messages.map(([m]) => m.type);
+  assert.equal(types[0], 'hub:ready');
+  assert.deepEqual(types.filter((t) => t !== 'hub:ready'), ['hub:score', 'hub:event', 'hub:gameover']);
+  const byType = Object.fromEntries(messages.map(([m]) => [m.type, m]));
+  assert.deepEqual(byType['hub:ready'], { type: 'hub:ready', version: 1 });
+  assert.deepEqual(byType['hub:score'], { type: 'hub:score', score: 6 });
+  assert.deepEqual(byType['hub:event'], { type: 'hub:event', version: 1, name: 'puzzle-completed', data: { guesses: 1, daily: true, streak: 1 } });
+  assert.equal(byType['hub:gameover'].score, 6);
+  assert.ok(byType['hub:gameover'].durationMs >= 0);
+  page.close();
+});
+
+test('opened on its own, it posts nothing', async () => {
+  const page = open();
+  let posted = 0;
+  page.window.postMessage = () => { posted += 1; };
+  await page.type(TARGET);
+  assert.equal(posted, 0);
   page.close();
 });
 

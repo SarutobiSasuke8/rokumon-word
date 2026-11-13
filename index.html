@@ -1131,7 +1131,27 @@
       keyboardEl.appendChild(r);
     });
 
-    const hubCall = (method, ...args) => { try { const s = window.Hub; if (typeof s?.[method] === 'function') s[method](...args); } catch {} };
+    // Hub bridge, version 1. Uses window.Hub when the page has one (the hub's /hub-bridge.js).
+    // Otherwise, when framed, posts the same messages that script would, so the hub hears the game
+    // without this file loading anything. Opened on its own, every call does nothing.
+    const framed = (() => { try { return window.parent !== window; } catch { return true; } })();
+    const post = (payload) => {
+      if (!framed) return;
+      try { window.parent.postMessage(payload, window.location.origin); } catch {}
+    };
+    const builtInHub = {
+      ready: () => post({ type: 'hub:ready', version: 1 }),
+      score: (score) => post({ type: 'hub:score', score }),
+      gameOver: (score, durationMs) => post({ type: 'hub:gameover', score, durationMs }),
+      event: (name, data) => post({ type: 'hub:event', version: 1, name, data }),
+    };
+    const hubCall = (method, ...args) => {
+      try {
+        const host = typeof window.Hub?.[method] === 'function' ? window.Hub : builtInHub;
+        host[method](...args);
+      } catch {}
+    };
+    let roundStartedAt = Date.now();
 
     function loadStats() { return sanitizeStats(store.get('rw-stats')); }
     function saveStats(s) { store.set('rw-stats', JSON.stringify(s)); }
@@ -1299,6 +1319,7 @@
       gameOver = false;
       lastResults = [];
       playedRows = [];
+      roundStartedAt = Date.now();
       endState = null;
       flash('');
       hideResult();
@@ -1562,9 +1583,9 @@
       if (won) {
         hubCall('score', 7 - used);
         hubCall('event', 'puzzle-completed', { guesses: used, daily: mode === 'daily', streak: s.streak });
-        hubCall('gameOver', 7 - used, 0);
+        hubCall('gameOver', 7 - used, Date.now() - roundStartedAt);
       } else {
-        hubCall('gameOver', 0, 0);
+        hubCall('gameOver', 0, Date.now() - roundStartedAt);
       }
       return { won, guesses: used, already: false, row: currentRow };
     }
