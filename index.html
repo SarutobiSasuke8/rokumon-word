@@ -292,6 +292,11 @@
     }
     .tile.cell.revealed .flipper { transform: rotateX(-180deg); }
     .tile.cell.sealed .flipper { transition: none; }
+    .tile.cell.instant .flipper { transition: none; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+      overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+    }
     .front, .back {
       position: absolute;
       inset: 0;
@@ -732,7 +737,8 @@
 
     <div class="board-wrap">
       <p class="toast" id="toast" role="status"></p>
-      <div class="board" id="board" aria-label="Guesses"></div>
+      <div class="board" id="board" role="group" aria-label="Guesses"></div>
+      <p class="sr-only" id="sr-log" aria-live="polite"></p>
     </div>
 
     <div class="dock">
@@ -805,7 +811,9 @@
     </div>
   </div>
 
-  <script>
+  <!-- Pure game rules: no DOM, no storage, no clock of its own. tests/core.test.mjs loads this block. -->
+  <script id="rw-core">
+    const RWCore = (() => {
     const WORDS = [
       'CRANE','SLATE','TRACE','ROAST','ADIEU','AUDIO','ARISE','STARE','CRATE','BRAIN',
       'TRAIN','SCORE','QUEST','GAMES','ALPHA','LEVEL','DAILY','HEART','LIGHT','GREEN',
@@ -868,11 +876,30 @@
       'WOUND','WROTE','YIELD'
     ];
     const WORD_SET = new Set(WORDS);
-    const PRAISE = ['Flawless', 'Brilliant', 'Splendid', 'Well struck', 'Close', 'Saved'];
+    const STATUSES = ['correct', 'present', 'absent'];
+    const ROWS = 6;
+    const COLS = 5;
 
-    function dateSeed() {
-      const d = new Date();
-      return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+    const pad2 = (n) => String(n).padStart(2, '0');
+    // The player's calendar day. The daily word, the lock, the streak and the share line all use this
+    // one key, so they can never disagree about what "today" is.
+    function dayKey(date) {
+      return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+    }
+    function isDayKey(value) {
+      if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+      const [y, m, d] = value.split('-').map(Number);
+      const probe = new Date(Date.UTC(y, m - 1, d));
+      return probe.getUTCFullYear() === y && probe.getUTCMonth() === m - 1 && probe.getUTCDate() === d;
+    }
+    function previousDayKey(key) {
+      const [y, m, d] = key.split('-').map(Number);
+      const prev = new Date(Date.UTC(y, m - 1, d - 1));
+      return `${prev.getUTCFullYear()}-${pad2(prev.getUTCMonth() + 1)}-${pad2(prev.getUTCDate())}`;
+    }
+    function seedFor(key) {
+      const [y, m, d] = key.split('-').map(Number);
+      return y * 10000 + m * 100 + d;
     }
     function mulberry32(a) {
       return function () {
@@ -882,22 +909,157 @@
         return ((t ^ t >>> 14) >>> 0) / 4294967296;
       };
     }
-    function dailyWord() {
-      const rng = mulberry32(dateSeed());
+    function dailyWordFor(key) {
+      const rng = mulberry32(seedFor(key));
       return WORDS[Math.floor(rng() * WORDS.length)];
     }
-    function puzzleNo() {
-      const start = Date.UTC(2026, 0, 1);
-      const now = new Date();
-      const day = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-      return Math.floor((day - start) / 86400000) + 1;
+    function puzzleNoFor(key) {
+      const [y, m, d] = key.split('-').map(Number);
+      return Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(2026, 0, 1)) / 86400000) + 1;
+    }
+    function randomWord(random) {
+      return WORDS[Math.min(WORDS.length - 1, Math.floor(random() * WORDS.length))];
+    }
+    function isValidGuess(word) {
+      return typeof word === 'string' && WORD_SET.has(word);
+    }
+    function evaluate(guess, target) {
+      const res = Array(COLS).fill('absent');
+      const used = Array(COLS).fill(false);
+      for (let i = 0; i < COLS; i++) if (guess[i] === target[i]) { res[i] = 'correct'; used[i] = true; }
+      for (let i = 0; i < COLS; i++) {
+        if (res[i] === 'correct') continue;
+        for (let j = 0; j < COLS; j++) {
+          if (!used[j] && target[j] === guess[i]) { res[i] = 'present'; used[j] = true; break; }
+        }
+      }
+      return res;
     }
 
+    function emptyStats() {
+      return { played: 0, wins: 0, streak: 0, maxStreak: 0, lastDaily: '', dailyResult: null };
+    }
+    const count = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : null);
+    function cleanGrid(grid) {
+      if (!Array.isArray(grid) || grid.length < 1 || grid.length > ROWS) return null;
+      for (const row of grid) {
+        if (!Array.isArray(row) || row.length !== COLS) return null;
+        if (!row.every((status) => STATUSES.includes(status))) return null;
+      }
+      return grid.map((row) => row.slice());
+    }
+    function cleanRows(rows, max) {
+      if (!Array.isArray(rows) || rows.length > max) return null;
+      if (!rows.every(isValidGuess)) return null;
+      return rows.slice();
+    }
+    function cleanDailyResult(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+      const grid = cleanGrid(raw.grid);
+      const guesses = count(raw.guesses);
+      if (!grid || guesses === null || guesses < 1 || guesses > ROWS || grid.length !== guesses) return null;
+      const won = raw.won === true;
+      const lastRowSolved = grid[grid.length - 1].every((status) => status === 'correct');
+      // A win ends on an all-correct row; a loss uses all six rows and never has one.
+      if (won !== lastRowSolved || (!won && guesses !== ROWS)) return null;
+      const result = { won, guesses, grid };
+      const rows = cleanRows(raw.rows, ROWS);
+      if (rows && rows.length === guesses) result.rows = rows;
+      return result;
+    }
+    // Anything unreadable, the wrong shape or out of range becomes a fresh record. Never throws.
+    function sanitizeStats(raw) {
+      let data = raw;
+      if (typeof raw === 'string') {
+        try { data = JSON.parse(raw); } catch { return emptyStats(); }
+      }
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return emptyStats();
+      const played = count(data.played);
+      const wins = count(data.wins);
+      const streak = count(data.streak);
+      const maxStreak = count(data.maxStreak);
+      if (played === null || wins === null || streak === null || maxStreak === null) return emptyStats();
+      if (wins > played || streak > maxStreak || maxStreak > played) return emptyStats();
+      const lastDaily = isDayKey(data.lastDaily) ? data.lastDaily : '';
+      const dailyResult = lastDaily ? cleanDailyResult(data.dailyResult) : null;
+      return { played, wins, streak, maxStreak, lastDaily, dailyResult };
+    }
+    // The streak a player should see today: it lapses once a whole day has been missed.
+    function currentStreak(stats, today) {
+      if (!stats.lastDaily) return 0;
+      return stats.lastDaily === today || stats.lastDaily === previousDayKey(today) ? stats.streak : 0;
+    }
+    // Returns a new record with one finished game added. `day` is the puzzle's day key (daily only).
+    function recordResult(stats, game) {
+      const next = Object.assign({}, stats);
+      next.played += 1;
+      if (game.won) next.wins += 1;
+      if (game.mode !== 'daily') return next;
+      if (stats.lastDaily === game.day) return stats; // this day is already on the record
+      if (game.won) {
+        next.streak = stats.lastDaily === previousDayKey(game.day) ? stats.streak + 1 : 1;
+        if (next.streak > next.maxStreak) next.maxStreak = next.streak;
+      } else {
+        next.streak = 0;
+      }
+      next.lastDaily = game.day;
+      next.dailyResult = { won: !!game.won, guesses: game.guesses, grid: game.grid.map((row) => row.slice()), rows: game.rows.slice() };
+      return next;
+    }
+    // An unfinished daily game, kept so a reload cannot hand out free extra guesses.
+    function sanitizeProgress(raw, today) {
+      let data = raw;
+      if (typeof raw === 'string') {
+        try { data = JSON.parse(raw); } catch { return []; }
+      }
+      if (!data || typeof data !== 'object' || data.day !== today) return [];
+      const rows = cleanRows(data.rows, ROWS - 1);
+      if (!rows) return [];
+      const target = dailyWordFor(today);
+      return rows.includes(target) ? [] : rows; // a solved or full game is a result, not progress
+    }
+    function shareText(label, grid) {
+      const lines = grid.map((row) => row.map((s) => (s === 'correct' ? '🟩' : s === 'present' ? '🟨' : '⬛')).join(''));
+      return `Rokumon Word ${label}\n${lines.join('\n')}`;
+    }
+
+    return {
+      WORDS, WORD_SET, ROWS, COLS, STATUSES,
+      dayKey, isDayKey, previousDayKey, seedFor, mulberry32, dailyWordFor, puzzleNoFor, randomWord,
+      isValidGuess, evaluate, emptyStats, sanitizeStats, currentStreak, recordResult, sanitizeProgress, shareText,
+    };
+    })();
+  </script>
+
+  <script>
+    const { WORDS, dayKey, dailyWordFor, puzzleNoFor, randomWord, isValidGuess, sanitizeStats, currentStreak, recordResult, sanitizeProgress, shareText } = RWCore;
+    const PRAISE = ['Flawless', 'Brilliant', 'Splendid', 'Well struck', 'Close', 'Saved'];
+
+    // Storage can be missing or blocked (private mode, a sandboxed frame). The game then keeps its
+    // record in memory for the visit instead of failing to start.
+    const memoryStore = new Map();
+    const store = {
+      get(key) {
+        try { const v = window.localStorage.getItem(key); return v === null ? (memoryStore.has(key) ? memoryStore.get(key) : null) : v; }
+        catch { return memoryStore.has(key) ? memoryStore.get(key) : null; }
+      },
+      set(key, value) {
+        memoryStore.set(key, value);
+        try { window.localStorage.setItem(key, value); } catch {}
+      },
+      remove(key) {
+        memoryStore.delete(key);
+        try { window.localStorage.removeItem(key); } catch {}
+      },
+    };
+
     let mode = 'daily';
-    let target = dailyWord();
+    let activeDay = dayKey(new Date());
+    let target = dailyWordFor(activeDay);
     let guesses = Array.from({ length: 6 }, () => Array(5).fill(''));
     let currentRow = 0, currentCol = 0, gameOver = false;
     let lastResults = [];
+    let playedRows = [];
     let revealing = false;
     let revealTimer = [];
     let endState = null;
@@ -921,10 +1083,14 @@
     for (let r = 0; r < 6; r++) {
       const row = document.createElement('div');
       row.className = 'row';
+      row.setAttribute('role', 'group');
+      row.setAttribute('aria-label', `Guess ${r + 1}`);
       for (let c = 0; c < 5; c++) {
         const t = document.createElement('div');
         t.className = 'tile cell';
         t.id = `t${r}${c}`;
+        t.setAttribute('role', 'img');
+        t.setAttribute('aria-label', 'empty');
         t.innerHTML = '<span class="flipper"><span class="front glyph"></span><span class="back glyph"></span></span>';
         row.appendChild(t);
       }
@@ -967,36 +1133,46 @@
 
     const hubCall = (method, ...args) => { try { const s = window.Hub; if (typeof s?.[method] === 'function') s[method](...args); } catch {} };
 
-    function loadStats() {
-      return JSON.parse(localStorage.getItem('rw-stats') || '{"played":0,"wins":0,"streak":0,"maxStreak":0,"lastDaily":"","dailyResult":null}');
-    }
-    function saveStats(s) { localStorage.setItem('rw-stats', JSON.stringify(s)); }
+    function loadStats() { return sanitizeStats(store.get('rw-stats')); }
+    function saveStats(s) { store.set('rw-stats', JSON.stringify(s)); }
+    function loadProgress() { return sanitizeProgress(store.get('rw-daily-progress'), activeDay); }
+    function saveProgress(rows) { store.set('rw-daily-progress', JSON.stringify({ day: activeDay, rows })); }
+    function clearProgress() { store.remove('rw-daily-progress'); }
     function loadPrefs() {
-      try { return JSON.parse(localStorage.getItem('rw-prefs') || '{"sound":true}'); }
-      catch { return { sound: true }; }
+      try {
+        const p = JSON.parse(store.get('rw-prefs') || '{}');
+        return p && typeof p === 'object' && !Array.isArray(p) ? p : {};
+      } catch { return {}; }
     }
     function savePrefs(p) {
-      localStorage.setItem('rw-prefs', JSON.stringify(Object.assign(loadPrefs(), p)));
+      store.set('rw-prefs', JSON.stringify(Object.assign(loadPrefs(), p)));
     }
     let soundOn = loadPrefs().sound !== false;
     soundToggle.setAttribute('aria-checked', soundOn ? 'true' : 'false');
 
+    const srLog = document.getElementById('sr-log');
+    function announce(text) {
+      srLog.textContent = '';
+      window.setTimeout(() => { srLog.textContent = text; }, 30);
+    }
+
     function updateStats() {
       const s = loadStats();
+      const streak = currentStreak(s, dayKey(new Date()));
       const pct = s.played ? Math.round(s.wins / s.played * 100) : 0;
       const win = s.played ? pct + '%' : '—';
       const pairs = [
         ['st-played', 'dg-played', s.played],
         ['st-win', 'dg-win', win],
-        ['st-streak', 'dg-streak', s.streak],
+        ['st-streak', 'dg-streak', streak],
         ['st-max', 'dg-max', s.maxStreak],
       ];
       for (const [a, b, v] of pairs) {
         document.getElementById(a).textContent = String(v);
         document.getElementById(b).textContent = String(v);
       }
-      document.getElementById('st-streak').closest('.stat').classList.toggle('hot', s.streak > 0);
-      document.getElementById('dg-streak').closest('.stat').classList.toggle('hot', s.streak > 0);
+      document.getElementById('st-streak').closest('.stat').classList.toggle('hot', streak > 0);
+      document.getElementById('dg-streak').closest('.stat').classList.toggle('hot', streak > 0);
     }
     updateStats();
 
@@ -1067,8 +1243,12 @@
       return id;
     }
 
+    const STATUS_WORD = { correct: 'right place', present: 'wrong place', absent: 'not in the word' };
     function setGlyph(tile, ch) {
       tile.querySelectorAll('.glyph').forEach((node) => { node.textContent = ch || ''; });
+    }
+    function labelTile(tile, ch, status) {
+      tile.setAttribute('aria-label', ch ? (status ? `${ch}, ${STATUS_WORD[status]}` : ch) : (status ? STATUS_WORD[status] : 'empty'));
     }
     function markLive() {
       document.querySelectorAll('.board .row').forEach((row, i) => {
@@ -1118,6 +1298,7 @@
       currentCol = 0;
       gameOver = false;
       lastResults = [];
+      playedRows = [];
       endState = null;
       flash('');
       hideResult();
@@ -1131,28 +1312,36 @@
           t.className = 'tile cell';
           t.style.animationDelay = '';
           setGlyph(t, '');
+          labelTile(t, '', '');
         }
       }
       document.querySelectorAll('.key').forEach((k) => {
         k.classList.remove('correct', 'present', 'absent', 'pip', 'armed');
+        if (k.dataset.letter) k.setAttribute('aria-label', k.dataset.letter);
       });
       markLive();
     }
 
-    function paintGrid(grid) {
+    // Paint finished rows without animation: a saved result (letters only if they were saved) or
+    // the rows of a daily game that was in progress before a reload.
+    function paintGrid(grid, rows) {
       (grid || []).forEach((row, r) => {
+        const word = rows && rows[r] ? rows[r] : '';
         row.forEach((status, c) => {
           const tile = document.getElementById(`t${r}${c}`);
-          tile.className = 'tile cell revealed sealed ' + status;
-          setGlyph(tile, '');
+          tile.className = 'tile cell revealed ' + (word ? 'filled instant ' : 'sealed ') + status;
+          setGlyph(tile, word ? word[c] : '');
+          labelTile(tile, word ? word[c] : '', status);
+          if (word) colorKey(word[c], status, true);
         });
       });
     }
 
     function setSubhead() {
       if (mode === 'daily') {
-        const when = new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-        subhead.textContent = `No. ${puzzleNo()} · ${when} · one word for everyone`;
+        const [y, mo, d] = activeDay.split('-').map(Number);
+        const when = new Date(y, mo - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+        subhead.textContent = `No. ${puzzleNoFor(activeDay)} · ${when} · one word for everyone`;
       } else {
         subhead.textContent = 'A new word every round · streak stays on daily';
       }
@@ -1191,6 +1380,7 @@
         countdown.hidden = false;
         const tick = () => {
           const n = new Date();
+          if (dayKey(n) !== activeDay) { rollOverIfNewDay(); return; }
           const next = new Date(n);
           next.setHours(24, 0, 0, 0);
           const s = Math.max(0, Math.floor((next - n) / 1000));
@@ -1216,26 +1406,46 @@
       btnDaily.classList.toggle('active', m === 'daily');
       btnPractice.classList.toggle('active', m === 'practice');
       const s = loadStats();
-      const today = new Date().toISOString().slice(0, 10);
+      if (m === 'daily') activeDay = dayKey(new Date());
       setSubhead();
-      if (m === 'daily' && s.lastDaily === today && s.dailyResult) {
-        target = dailyWord();
+      updateStats();
+      if (m === 'daily' && s.lastDaily === activeDay && s.dailyResult) {
+        target = dailyWordFor(activeDay);
         resetBoard();
         gameOver = true;
-        lastResults = s.dailyResult.grid || [];
-        paintGrid(lastResults);
+        lastResults = s.dailyResult.grid;
+        playedRows = s.dailyResult.rows || [];
+        paintGrid(lastResults, playedRows);
         showResult({
-          won: !!s.dailyResult.won,
-          guesses: s.dailyResult.guesses || 6,
+          won: s.dailyResult.won,
+          guesses: s.dailyResult.guesses,
           already: true,
         });
+      } else if (m === 'daily') {
+        target = dailyWordFor(activeDay);
+        resetBoard();
+        // Put back the guesses already spent on today's word.
+        playedRows = loadProgress();
+        lastResults = playedRows.map((word) => RWCore.evaluate(word, target));
+        playedRows.forEach((word, r) => { guesses[r] = word.split(''); });
+        paintGrid(lastResults, playedRows);
+        currentRow = playedRows.length;
+        if (playedRows.length) announce(`${playedRows.length} of 6 guesses already used today.`);
       } else {
-        target = m === 'daily' ? dailyWord() : WORDS[Math.floor(Math.random() * WORDS.length)];
+        target = randomWord(Math.random);
         resetBoard();
       }
       markLive();
       hubCall('ready');
     }
+    // A tab left open past midnight moves on to the new day's word, unless a game is under way.
+    function rollOverIfNewDay() {
+      if (mode !== 'daily' || revealing) return;
+      if (dayKey(new Date()) === activeDay) return;
+      if (!gameOver && (currentRow > 0 || currentCol > 0)) return;
+      setMode('daily');
+    }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') rollOverIfNewDay(); });
     btnDaily.addEventListener('click', () => { if (!revealing) setMode('daily'); });
     btnPractice.addEventListener('click', () => { if (!revealing) setMode('practice'); });
     againBtn.addEventListener('click', () => setMode(mode === 'daily' ? 'practice' : 'practice'));
@@ -1267,19 +1477,7 @@
       }
       markLive();
     }
-    function evaluate(guess) {
-      const res = Array(5).fill('absent');
-      const targetArr = target.split('');
-      const used = Array(5).fill(false);
-      for (let i = 0; i < 5; i++) if (guess[i] === target[i]) { res[i] = 'correct'; used[i] = true; }
-      for (let i = 0; i < 5; i++) {
-        if (res[i] === 'correct') continue;
-        const idx = targetArr.findIndex((ch, j) => ch === guess[i] && !used[j]);
-        if (idx !== -1) { res[i] = 'present'; used[idx] = true; }
-      }
-      return res;
-    }
-    function colorKey(letter, status) {
+    function colorKey(letter, status, quiet) {
       const priority = { correct: 3, present: 2, absent: 1 };
       document.querySelectorAll('.key').forEach((btn) => {
         if (btn.dataset.letter !== letter) return;
@@ -1287,17 +1485,16 @@
         if (priority[status] > cur) {
           btn.classList.remove('correct', 'present', 'absent');
           btn.classList.add(status);
+          btn.setAttribute('aria-label', `${letter}, ${STATUS_WORD[status]}`);
         }
+        if (quiet) return;
         btn.classList.remove('pip');
         void btn.offsetWidth;
         btn.classList.add('pip');
       });
     }
-    function emojiGrid() {
-      return lastResults.map((row) => row.map((s) => s === 'correct' ? '🟩' : s === 'present' ? '🟨' : '⬛').join('')).join('\n');
-    }
     shareBtn.addEventListener('click', async () => {
-      const text = `Rokumon Word ${mode === 'daily' ? new Date().toISOString().slice(0, 10) : 'Practice'}\n${emojiGrid()}`;
+      const text = shareText(mode === 'daily' ? activeDay : 'Practice', lastResults);
       try {
         if (navigator.share) {
           await navigator.share({ text });
@@ -1331,6 +1528,7 @@
         const delay = motion ? i * 260 : 0;
         later(() => {
           tile.classList.add(status, 'revealed');
+          labelTile(tile, guess[i], status);
           playReveal(status);
           colorKey(guess[i], status);
         }, delay);
@@ -1347,43 +1545,28 @@
       }
     }
     function commitGuess(guess) {
-      const s = loadStats();
-      const today = new Date().toISOString().slice(0, 10);
-      if (guess === target) {
-        gameOver = true;
-        s.played++;
-        s.wins++;
-        if (mode === 'daily') {
-          if (s.lastDaily !== today) {
-            s.streak++;
-            s.lastDaily = today;
-            if (s.streak > s.maxStreak) s.maxStreak = s.streak;
-          }
-          s.dailyResult = { won: true, guesses: currentRow + 1, grid: lastResults };
-        }
-        saveStats(s);
-        updateStats();
-        hubCall('score', 7 - (currentRow + 1));
-        hubCall('event', 'puzzle-completed', { guesses: currentRow + 1, daily: mode === 'daily', streak: s.streak });
-        hubCall('gameOver', 7 - (currentRow + 1), 0);
-        return { won: true, guesses: currentRow + 1, already: false, row: currentRow };
+      playedRows.push(guess);
+      const won = guess === target;
+      if (!won && currentRow < 5) {
+        if (mode === 'daily') saveProgress(playedRows);
+        currentRow++;
+        currentCol = 0;
+        return null;
       }
-      if (currentRow === 5) {
-        gameOver = true;
-        s.played++;
-        if (mode === 'daily') {
-          s.streak = 0;
-          s.lastDaily = today;
-          s.dailyResult = { won: false, guesses: 6, grid: lastResults };
-        }
-        saveStats(s);
-        updateStats();
+      gameOver = true;
+      const used = currentRow + 1;
+      const s = recordResult(loadStats(), { mode, won, guesses: used, grid: lastResults, rows: playedRows, day: activeDay });
+      saveStats(s);
+      if (mode === 'daily') clearProgress();
+      updateStats();
+      if (won) {
+        hubCall('score', 7 - used);
+        hubCall('event', 'puzzle-completed', { guesses: used, daily: mode === 'daily', streak: s.streak });
+        hubCall('gameOver', 7 - used, 0);
+      } else {
         hubCall('gameOver', 0, 0);
-        return { won: false, guesses: 6, already: false, row: currentRow };
       }
-      currentRow++;
-      currentCol = 0;
-      return null;
+      return { won, guesses: used, already: false, row: currentRow };
     }
     function submit() {
       if (gameOver || revealing) return;
@@ -1396,14 +1579,14 @@
         return;
       }
       const guess = guesses[currentRow].join('');
-      if (!WORD_SET.has(guess)) {
+      if (!isValidGuess(guess)) {
         shakeRow();
         flash('Not in word list');
         playInvalid();
         return;
       }
       flash('');
-      const result = evaluate(guess);
+      const result = RWCore.evaluate(guess, target);
       lastResults.push(result);
       const rowIndex = currentRow;
       const outcome = commitGuess(guess);
@@ -1412,7 +1595,9 @@
       revealRow(rowIndex, guess, result, () => {
         revealing = false;
         markLive();
-        if (!outcome) return;
+        const spoken = result.map((status, i) => `${guess[i]} ${STATUS_WORD[status]}`).join(', ');
+        if (!outcome) { announce(`Guess ${rowIndex + 1}: ${spoken}. ${5 - rowIndex} left.`); return; }
+        announce(outcome.won ? `Solved in ${outcome.guesses}. The word was ${target}.` : `Out of guesses. The word was ${target}.`);
         if (outcome.won) {
           bounceRow(outcome.row);
           burst();
@@ -1424,7 +1609,20 @@
       });
     }
 
-    function closeInfo() { info.hidden = true; }
+    function closeInfo() {
+      if (info.hidden) return;
+      info.hidden = true;
+      document.getElementById('info-btn').focus();
+    }
+    // Keep Tab inside the open dialog.
+    info.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const stops = [...info.querySelectorAll('button')].filter((el) => !el.disabled);
+      if (!stops.length) return;
+      const first = stops[0], last = stops[stops.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
     document.addEventListener('keydown', (e) => {
       if (!info.hidden) {
         if (e.key === 'Escape') closeInfo();
@@ -1432,6 +1630,8 @@
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.repeat && e.key !== 'Backspace') return;
+      const control = e.target instanceof Element ? e.target.closest('button, a, input, select, textarea') : null;
+      if (control && !control.classList.contains('key') && (e.key === 'Enter' || e.key === ' ')) return;
       if (e.key === 'Enter') { e.preventDefault(); submit(); }
       else if (e.key === 'Backspace') { e.preventDefault(); handleKey('Backspace'); }
       else if (/^[a-zA-Z]$/.test(e.key)) { e.preventDefault(); handleKey(e.key.toUpperCase()); }
@@ -1442,6 +1642,7 @@
     infoBtn.addEventListener('click', () => {
       updateStats();
       info.hidden = false;
+      document.getElementById('info-close').focus();
       infoBtn.classList.remove('hint');
       savePrefs({ seenHow: true });
     });
